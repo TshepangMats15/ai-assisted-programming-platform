@@ -1,4 +1,5 @@
 // DevMate Student Home / Dashboard
+import { router } from "expo-router";
 
 import {
   SafeAreaView,
@@ -172,7 +173,10 @@ export default function DashboardScreen() {
           <Text style={styles.activeNavText}>Home</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("/learn")}
+        >
           <Text style={styles.navIcon}>▤</Text>
           <Text style={styles.navText}>Learn</Text>
         </TouchableOpacity>
