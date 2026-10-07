@@ -63,7 +63,10 @@ export default function LearnScreen() {
 
         {/* Python Course */}
 
-        <TouchableOpacity style={styles.courseCard}>
+        <TouchableOpacity 
+          style={styles.courseCard}
+          onPress={() => router.push("/assessments")}
+        >
           <View style={styles.courseInfo}>
             <View style={styles.courseIcon}>
               <Text style={styles.courseIconText}>Py</Text>
