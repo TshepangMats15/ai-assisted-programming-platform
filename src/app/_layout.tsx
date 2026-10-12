@@ -1,18 +1,28 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+// Main navigation layout for the ITDMA app
 
-SplashScreen.preventAutoHideAsync();
+import { Stack } from "expo-router";
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <Stack>
+      {/* Login Screen */}
+      <Stack.Screen
+        name="index"
+        options={{ headerShown: false }}
+      />
+
+      {/* Registration Screen */}
+      <Stack.Screen
+        name="register"
+        options={{ title: "Register" }}
+      />
+
+      {/* Forgot Password Screen */}
+      <Stack.Screen
+        name="forgot-password"
+        options={{ title: "Forgot Password" }}
+      />
+    </Stack>
   );
 }
