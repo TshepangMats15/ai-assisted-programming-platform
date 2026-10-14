@@ -169,9 +169,11 @@ export default function AssessmentDetailsScreen() {
 
         <TouchableOpacity style={styles.startButton}>
           <Text style={styles.startButtonText}
-            onPress={() => router.push("/coding-workspace")}
-          >
-            Continue Assessment
+            onPress={() => router.push("/coding-workspace")}>
+          </Text>
+
+          <Text style={styles.startButtonText}>
+           Continue Assessment
           </Text>
         </TouchableOpacity>
       </ScrollView>

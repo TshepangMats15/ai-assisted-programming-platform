@@ -58,9 +58,12 @@ export default function AssessmentsScreen() {
 
         <Text style={styles.sectionTitle}>Assessments</Text>
 
-        {/* Assessment 1 */}
+        {/* Assessment 1 - Completed */}
 
-        <TouchableOpacity style={styles.assessmentCard}>
+        <TouchableOpacity
+          style={styles.assessmentCard}
+          disabled={true}
+        >
           <View style={styles.cardTop}>
             <View style={styles.numberBox}>
               <Text style={styles.numberText}>01</Text>
@@ -92,13 +95,12 @@ export default function AssessmentsScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Assessment 2 */}
+        {/* Assessment 2 - In Progress */}
 
-        <TouchableOpacity 
-        style={styles.assessmentCard}
-        onPress={() => router.push("/assessment-details")}
+        <TouchableOpacity
+          style={styles.assessmentCard}
+          onPress={() => router.push("/assessment-details")}
         >
-
           <View style={styles.cardTop}>
             <View style={styles.numberBox}>
               <Text style={styles.numberText}>02</Text>
@@ -130,9 +132,12 @@ export default function AssessmentsScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Assessment 3 */}
+        {/* Assessment 3 - Not Started */}
 
-        <TouchableOpacity style={styles.assessmentCard}>
+        <TouchableOpacity
+          style={styles.assessmentCard}
+          onPress={() => router.push("/assessment-details")}
+        >
           <View style={styles.cardTop}>
             <View style={styles.numberBox}>
               <Text style={styles.numberText}>03</Text>
@@ -164,9 +169,12 @@ export default function AssessmentsScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* Assessment 4 */}
+        {/* Assessment 4 - Locked */}
 
-        <TouchableOpacity style={styles.assessmentCard}>
+        <TouchableOpacity
+          style={styles.assessmentCard}
+          disabled={true}
+        >
           <View style={styles.cardTop}>
             <View style={styles.numberBox}>
               <Text style={styles.numberText}>04</Text>

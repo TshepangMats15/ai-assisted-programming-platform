@@ -34,8 +34,10 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.notificationButton}>
-            <Text style={styles.notificationIcon}>●</Text>
+          <TouchableOpacity style={styles.notificationButton}
+            onPress={()=> router.push("/notification")}>
+            <Text style={styles.notificationIcon}
+            onPress={()=> router.push("/notification")}>●</Text>
           </TouchableOpacity>
         </View>
 
@@ -71,7 +73,8 @@ export default function DashboardScreen() {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Progress</Text>
 
-          <TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton}
+            onPress={()=> router.push("/progress")}>
             <Text style={styles.seeAll}>Details</Text>
           </TouchableOpacity>
         </View>
@@ -139,19 +142,22 @@ export default function DashboardScreen() {
 
         <View style={styles.quickActions}>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton}
+            onPress={()=> router.push("/coding-workspace")}>
             <Text style={styles.actionSymbol}>+</Text>
             <Text style={styles.actionText}>New Project</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton}
+            onPress={()=> router.push("/projects")}>
             <Text style={styles.actionSymbol}>{"</>"}</Text>
             <Text style={styles.actionText}>My Projects</Text>
           </TouchableOpacity>
 
         </View>
 
-        <TouchableOpacity style={styles.aiButton}>
+        <TouchableOpacity style={styles.aiButton}
+          onPress={()=> router.push("/ai-assisstance")}>
           <Text style={styles.aiButtonTitle}>
             AI Assistant
           </Text>
@@ -181,12 +187,14 @@ export default function DashboardScreen() {
           <Text style={styles.navText}>Learn</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem}
+          onPress={()=> router.push("/settings")}>
           <Text style={styles.navIcon}>⚙</Text>
           <Text style={styles.navText}>Settings</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem}
+          onPress={()=> router.push("/profile")}>
           <Text style={styles.navIcon}>○</Text>
           <Text style={styles.navText}>Account</Text>
         </TouchableOpacity>
