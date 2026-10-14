@@ -65,7 +65,7 @@ export default function LearnScreen() {
 
         <TouchableOpacity 
           style={styles.courseCard}
-          onPress={() => router.push("/assessments")}
+          onPress={() => router.push("/coursework")}
         >
           <View style={styles.courseInfo}>
             <View style={styles.courseIcon}>
