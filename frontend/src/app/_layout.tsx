@@ -1,15 +1,22 @@
 
-// Main navigation layout for the ITDMA app
 
+import React from "react";
 import { Stack } from "expo-router";
+import {
+  ThemeProvider,
+  useAppTheme,
+} from "../context/ThemeContext";
 
-export default function RootLayout() {
+// Navigation uses the currently selected theme
+function AppNavigator() {
+  const { colors } = useAppTheme();
+
   return (
     <Stack
       screenOptions={{
         headerShown: false,
         contentStyle: {
-          backgroundColor: "#0D0D0D",
+          backgroundColor: colors.background,
         },
       }}
     >
@@ -39,5 +46,14 @@ export default function RootLayout() {
       <Stack.Screen name="profile" />
       <Stack.Screen name="settings" />
     </Stack>
+  );
+}
+
+// Main application layout
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <AppNavigator />
+    </ThemeProvider>
   );
 }

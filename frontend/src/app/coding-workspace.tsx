@@ -49,7 +49,7 @@ export default function CodingWorkspaceScreen() {
 
   // Open the AI Assistance screen
   function openAIHelp() {
-    router.push("/ai-assistance");
+    router.push("/ai-assisstance");
   }
 
   return (
