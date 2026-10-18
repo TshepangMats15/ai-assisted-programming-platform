@@ -1,13 +1,13 @@
 
-
 import React from "react";
 import { Stack } from "expo-router";
+
 import {
   ThemeProvider,
   useAppTheme,
 } from "../context/ThemeContext";
 
-// Navigation uses the currently selected theme
+// Main navigation uses the selected app theme
 function AppNavigator() {
   const { colors } = useAppTheme();
 
@@ -25,12 +25,11 @@ function AppNavigator() {
       <Stack.Screen name="register" />
       <Stack.Screen name="forgot-password" />
 
-      {/* Student Main Screens */}
-      <Stack.Screen name="dashboard" />
-      <Stack.Screen name="learn" />
-      <Stack.Screen name="coursework" />
+      {/* Student Bottom Tabs */}
+      <Stack.Screen name="(student)" />
 
-      {/* Assessment Screens */}
+      {/* Coursework and Assessment Screens */}
+      <Stack.Screen name="coursework" />
       <Stack.Screen name="assessments" />
       <Stack.Screen name="assessment-details" />
       <Stack.Screen name="coding-workspace" />
@@ -40,16 +39,15 @@ function AppNavigator() {
       <Stack.Screen name="ai-assistance" />
       <Stack.Screen name="progress" />
       <Stack.Screen name="projects" />
+      <Stack.Screen name="explore" />
 
-      {/* Student Account Screens */}
+      {/* Notifications */}
       <Stack.Screen name="notifications" />
-      <Stack.Screen name="profile" />
-      <Stack.Screen name="settings" />
     </Stack>
   );
 }
 
-// Main application layout
+// Wrap the application in the theme provider
 export default function RootLayout() {
   return (
     <ThemeProvider>

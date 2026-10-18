@@ -1,6 +1,7 @@
-// Import Firebase functions
+
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -12,11 +13,14 @@ const firebaseConfig = {
   appId: "1:645015931725:web:dcb5c6b105a49c9cb5c504",
 };
 
-// Initialize Firebase
+// Initialize Firebase once
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Authentication
 const auth = getAuth(app);
 
-// Export authentication so we can use it in other files
-export { auth };
+// Initialize Firebase Storage
+const storage = getStorage(app);
+
+// Export Firebase services
+export { auth, storage };
