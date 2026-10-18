@@ -1,5 +1,11 @@
 package AI.Productivity.Platform.dto;
 
+import java.math.BigDecimal;
 
-public record ResultRequest(Long submissionId, Double score, String aiFeedback) {
-}
+public record ResultRequest(
+        String userId,
+        Integer assessmentId,
+        BigDecimal score,
+        Integer completionTime,
+        Integer aiUsage
+) {}

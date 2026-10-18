@@ -1,6 +1,7 @@
 package AI.Productivity.Platform.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -12,35 +13,54 @@ public class Result {
     @Column(name = "result_id")
     private Long resultId;
 
-    @Column(name = "submission_id", nullable = false)
-    private Long submissionId;
+    @Column(name = "user_id", nullable = false)
+    private String userId;
 
-    @Column(name = "score", nullable = false)
-    private Double score;
+    @Column(name = "assessment_id", nullable = false)
+    private Integer assessmentId;
 
-    @Column(name = "ai_feedback", columnDefinition = "TEXT")
-    private String aiFeedback;
+    @Column(name = "score", precision = 10, scale = 2)
+    private BigDecimal score;
 
-    @Column(name = "created_at", nullable = false)
-    private LocalDateTime createdAt;
+    @Column(name = "completion_time")
+    private Integer completionTime;
+
+    @Column(name = "ai_usage")
+    private Integer aiUsage;
+
+    @Column(name = "submitted_at", nullable = false)
+    private LocalDateTime submittedAt;
 
     public Result() {}
 
-    public Result(Long submissionId, Double score, String aiFeedback, LocalDateTime createdAt) {
-        this.submissionId = submissionId;
+    public Result(String userId, Integer assessmentId, BigDecimal score,
+                  Integer completionTime, Integer aiUsage, LocalDateTime submittedAt) {
+        this.userId = userId;
+        this.assessmentId = assessmentId;
         this.score = score;
-        this.aiFeedback = aiFeedback;
-        this.createdAt = createdAt;
+        this.completionTime = completionTime;
+        this.aiUsage = aiUsage;
+        this.submittedAt = submittedAt;
     }
 
     public Long getResultId() { return resultId; }
     public void setResultId(Long resultId) { this.resultId = resultId; }
-    public Long getSubmissionId() { return submissionId; }
-    public void setSubmissionId(Long submissionId) { this.submissionId = submissionId; }
-    public Double getScore() { return score; }
-    public void setScore(Double score) { this.score = score; }
-    public String getAiFeedback() { return aiFeedback; }
-    public void setAiFeedback(String aiFeedback) { this.aiFeedback = aiFeedback; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+
+    public Integer getAssessmentId() { return assessmentId; }
+    public void setAssessmentId(Integer assessmentId) { this.assessmentId = assessmentId; }
+
+    public BigDecimal getScore() { return score; }
+    public void setScore(BigDecimal score) { this.score = score; }
+
+    public Integer getCompletionTime() { return completionTime; }
+    public void setCompletionTime(Integer completionTime) { this.completionTime = completionTime; }
+
+    public Integer getAiUsage() { return aiUsage; }
+    public void setAiUsage(Integer aiUsage) { this.aiUsage = aiUsage; }
+
+    public LocalDateTime getSubmittedAt() { return submittedAt; }
+    public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
 }

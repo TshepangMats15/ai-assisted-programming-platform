@@ -1,9 +1,9 @@
 package com.devmate.Services;
 
+import AI.Productivity.Platform.entity.Result;
+import AI.Productivity.Platform.repository.ResultRepository;
 import com.devmate.Entities.AIInteraction;
-import com.devmate.Entities.Result;
 import com.devmate.Repository.AIInteractionRepository;
-import com.devmate.Repository.ResultRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -19,10 +19,10 @@ public class AnalyticsServices {
     private final AIInteractionRepository interactionRepository;
 
     public AnalyticsServices(
-            ResultRepository resultRepository,
+            ResultRepository ResultRepository,
             AIInteractionRepository interactionRepository) {
 
-        this.resultRepository = resultRepository;
+        this.resultRepository = ResultRepository;
         this.interactionRepository = interactionRepository;
     }
 
@@ -63,7 +63,7 @@ public class AnalyticsServices {
     public Map<String, Object> getUserAnalytics(String userID) {
 
         List<Result> results =
-                resultRepository.findByUserID(userID);
+                resultRepository.findByUserId(userID);
 
         List<AIInteraction> interactions =
                 interactionRepository.findByUserID(userID);
@@ -110,9 +110,9 @@ public class AnalyticsServices {
         Map<Integer, List<Result>> groupedResults =
                 results.stream()
                         .filter(result ->
-                                result.getAssessmentID() != null)
+                                result.getAssessmentId() != null)
                         .collect(Collectors.groupingBy(
-                                Result::getAssessmentID,
+                                Result::getAssessmentId,
                                 LinkedHashMap::new,
                                 Collectors.toList()));
 
@@ -274,9 +274,9 @@ public class AnalyticsServices {
         Map<Integer, List<Result>> groupedResults =
                 results.stream()
                         .filter(result ->
-                                result.getAssessmentID() != null)
+                                result.getAssessmentId() != null)
                         .collect(Collectors.groupingBy(
-                                Result::getAssessmentID,
+                                Result::getAssessmentId,
                                 LinkedHashMap::new,
                                 Collectors.toList()));
 

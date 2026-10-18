@@ -17,8 +17,8 @@ public class SubmissionController {
 
     @PostMapping
     public SubmissionResponse submitCode(@RequestBody SubmissionRequest request) {
-        // Temporarily hardcode a User ID since Firebase Auth is not linked to this route yet
-        Long temporaryUserId = 1L;
+        // Temporarily hardcode a User ID string since Firebase Auth isn't fully linked
+        String temporaryUserId = "test-user-id";
         return submissionService.processSubmission(temporaryUserId, request);
     }
 }

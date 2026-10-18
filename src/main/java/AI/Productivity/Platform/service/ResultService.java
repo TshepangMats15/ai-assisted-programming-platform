@@ -11,21 +11,26 @@ import java.time.LocalDateTime;
 @Service
 public class ResultService {
 
-    private final ResultRepository repository;
+    private final ResultRepository resultRepository;
 
-    public ResultService(ResultRepository repository) {
-        this.repository = repository;
+    public ResultService(ResultRepository resultRepository) {
+        this.resultRepository = resultRepository;
     }
 
     public ResultResponse saveResult(ResultRequest request) {
         LocalDateTime now = LocalDateTime.now();
+
+        // Creating the result using the exact flat fields from the updated Result entity
         Result result = new Result(
-                request.submissionId(),
+                request.userId(),
+                request.assessmentId(),
                 request.score(),
-                request.aiFeedback(),
+                request.completionTime(),
+                request.aiUsage(),
                 now
         );
-        Result savedResult = repository.save(result);
+
+        Result savedResult = resultRepository.save(result);
         return new ResultResponse(savedResult.getResultId(), "Result successfully saved.", now);
     }
 }
