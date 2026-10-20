@@ -96,6 +96,33 @@ export default function LoginScreen() {
         </Text>
       </TouchableOpacity>
 
+      {/* Development-only admin frontend preview */}
+      {__DEV__ && (
+        <TouchableOpacity
+          style={{
+            backgroundColor: "#312047",
+            borderWidth: 1,
+            borderColor: "#A78BFA",
+            borderRadius: 12,
+            paddingVertical: 15,
+            paddingHorizontal: 18,
+            alignItems: "center",
+            marginBottom: 18,
+          }}
+          onPress={() => router.push("/club-admin")}
+        >
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 14,
+              fontWeight: "bold",
+            }}
+          >
+            Preview Coding Club Admin
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Login button */}
       <TouchableOpacity
         style={styles.button}

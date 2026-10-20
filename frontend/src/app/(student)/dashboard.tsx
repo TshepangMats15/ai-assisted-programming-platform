@@ -1,4 +1,4 @@
-
+﻿
 import React from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -269,7 +269,7 @@ export default function DashboardScreen() {
         {/* AI ASSISTANT */}
         <TouchableOpacity
           style={styles.aiButton}
-          onPress={() => router.push("/ai-assisstance")}
+          onPress={() => router.push("/ai-assistance")}
         >
           <View style={styles.aiContent}>
             <Ionicons
@@ -474,3 +474,4 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 });
+

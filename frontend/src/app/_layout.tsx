@@ -28,6 +28,13 @@ function AppNavigator() {
       {/* Student Bottom Tabs */}
       <Stack.Screen name="(student)" />
 
+      {/* Member 2 Client Screens */}
+      <Stack.Screen name="client/clienthome" />
+      <Stack.Screen name="client/help" />
+      <Stack.Screen name="client/notification" />
+      <Stack.Screen name="client/profile" />
+      <Stack.Screen name="client/settings" />
+
       {/* Coursework and Assessment Screens */}
       <Stack.Screen name="coursework" />
       <Stack.Screen name="assessments" />

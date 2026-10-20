@@ -1,4 +1,4 @@
-// DevMate Student Coding Workspace
+﻿// DevMate Student Coding Workspace
 
 import { router } from "expo-router";
 import { useState } from "react";
@@ -107,7 +107,7 @@ export default function CodingWorkspaceScreen() {
 
   // Open the AI Assistance screen
   function openAIHelp() {
-    router.push("/ai-assisstance");
+    router.push("/ai-assistance");
   }
 
   return (
@@ -127,7 +127,7 @@ export default function CodingWorkspaceScreen() {
               style={styles.backButton}
               onPress={() => router.back()}
             >
-              <Text style={styles.backText}>‹</Text>
+              <Text style={styles.backText}>ÔÇ╣</Text>
             </TouchableOpacity>
 
             <View style={styles.headerInfo}>
@@ -153,15 +153,15 @@ export default function CodingWorkspaceScreen() {
             </Text>
 
             <Text style={styles.requirement}>
-              • 75 or above: Distinction
+              ÔÇó 75 or above: Distinction
             </Text>
 
             <Text style={styles.requirement}>
-              • 50 to 74: Pass
+              ÔÇó 50 to 74: Pass
             </Text>
 
             <Text style={styles.requirement}>
-              • Below 50: Fail
+              ÔÇó Below 50: Fail
             </Text>
 
             <Text style={styles.questionNote}>
@@ -225,7 +225,7 @@ export default function CodingWorkspaceScreen() {
               style={styles.runButton}
               onPress={runCode}
             >
-              <Text style={styles.runButtonText}>▶ Run Code</Text>
+              <Text style={styles.runButtonText}>ÔûÂ Run Code</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -246,14 +246,14 @@ export default function CodingWorkspaceScreen() {
 
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.cameraButton} onPress={takePhoto}>
-              <Text style={styles.cameraButtonText}>📷 Take Photo</Text>
+              <Text style={styles.cameraButtonText}>­ƒôÀ Take Photo</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.galleryButton}
               onPress={uploadScreenshot}
             >
-              <Text style={styles.galleryButtonText}>🖼️ Upload Screenshot</Text>
+              <Text style={styles.galleryButtonText}>­ƒû╝´©Å Upload Screenshot</Text>
             </TouchableOpacity>
           </View>
 
@@ -279,7 +279,7 @@ export default function CodingWorkspaceScreen() {
             onPress={analyzeImage}
             disabled={!selectedImage}
           >
-            <Text style={styles.analyzeButtonText}>🤖 Analyze Image with AI</Text>
+            <Text style={styles.analyzeButtonText}>­ƒñû Analyze Image with AI</Text>
           </TouchableOpacity>
           <Text style={styles.cameraNote}>
             Image capture is ready. AI image analysis requires a backend connection.
@@ -654,4 +654,5 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 });
+
 
