@@ -1,7 +1,6 @@
-﻿// DevMate Student Coding Workspace
-
+﻿
+import React, { useState } from "react";
 import { router } from "expo-router";
-import { useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 
 import {
@@ -18,26 +17,79 @@ import {
   View,
 } from "react-native";
 
+import { api } from "../constants/api";
+
 export default function CodingWorkspaceScreen() {
-  // Store the code written by the student
+  // Store the student's Python code
   const [code, setCode] = useState(
     '# Write your Python solution here\nmark = int(input("Enter your mark: "))\n'
   );
 
-  // Store messages displayed in the output area
+  // Store output messages
   const [output, setOutput] = useState(
     "Your program output will appear here."
   );
 
-  // Store the photo selected by the student
+  // Store the selected image
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  // Ask for camera permission and take a picture
+  // Track submission progress
+  const [submitting, setSubmitting] = useState(false);
+
+  // Submit code to the backend
+  async function handleSubmit() {
+    if (code.trim() === "") {
+      Alert.alert(
+        "Empty Code",
+        "Please write your Python solution first."
+      );
+      return;
+    }
+
+    if (submitting) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const response = await api.submissions.submitCode({
+        assessmentId: 1,
+        sourceCode: code,
+        attemptNumber: 1,
+      });
+
+      Alert.alert(
+        "Submission Successful",
+        `Submission #${response.submissionId} submitted successfully!`,
+        [
+          {
+            text: "OK",
+            onPress: () => router.push("/submission"),
+          },
+        ]
+      );
+    } catch (error: any) {
+      Alert.alert(
+        "Submission Failed",
+        error?.message || "Unable to connect to the backend."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Take a photo using the camera
   async function takePhoto() {
     try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      const permission =
+        await ImagePicker.requestCameraPermissionsAsync();
+
       if (!permission.granted) {
-        Alert.alert("Camera Permission", "Please allow camera access to take a photo.");
+        Alert.alert(
+          "Camera Permission",
+          "Please allow camera access to take a photo."
+        );
         return;
       }
 
@@ -51,11 +103,14 @@ export default function CodingWorkspaceScreen() {
         setSelectedImage(result.assets[0].uri);
       }
     } catch (error) {
-      Alert.alert("Camera Error", "Unable to open the camera. Please try again.");
+      Alert.alert(
+        "Camera Error",
+        "Unable to open the camera."
+      );
     }
   }
 
-  // Choose an existing screenshot or photo
+  // Upload an image from the gallery
   async function uploadScreenshot() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -68,44 +123,45 @@ export default function CodingWorkspaceScreen() {
         setSelectedImage(result.assets[0].uri);
       }
     } catch (error) {
-      Alert.alert("Gallery Error", "Unable to select an image. Please try again.");
+      Alert.alert(
+        "Gallery Error",
+        "Unable to select an image."
+      );
     }
   }
 
-  // The AI image endpoint still needs to be connected by the team
+  // Analyze the selected image
   function analyzeImage() {
     if (!selectedImage) {
-      Alert.alert("No Image", "Take a photo or upload a screenshot first.");
+      Alert.alert(
+        "No Image",
+        "Please select an image first."
+      );
       return;
     }
 
     Alert.alert(
       "AI Image Analysis",
-      "Your image is ready. AI image analysis will work once the backend image endpoint is connected."
+      "Your image is ready. AI image analysis requires a backend connection."
     );
   }
 
-  // Show a message until code execution is connected
+  // Run Python code
   function runCode() {
+    if (code.trim() === "") {
+      Alert.alert(
+        "Empty Code",
+        "Please write some Python code first."
+      );
+      return;
+    }
+
     setOutput(
       "Code execution is not connected yet. Your code has been kept in the editor."
     );
   }
 
-  // Navigate to the submission screen
-  function submitCode() {
-    if (code.trim() === "") {
-      Alert.alert("Empty Code", "Please write your solution first.");
-      return;
-    }
-
-    router.push({
-      pathname: "/submission",
-      params: { code: code },
-    });
-  }
-
-  // Open the AI Assistance screen
+  // Open AI Assistance
   function openAIHelp() {
     router.push("/ai-assistance");
   }
@@ -121,17 +177,18 @@ export default function CodingWorkspaceScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* HEADER */}
-
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={() => router.back()}
             >
-              <Text style={styles.backText}>ÔÇ╣</Text>
+              <Text style={styles.backText}>{"‹"}</Text>
             </TouchableOpacity>
 
             <View style={styles.headerInfo}>
-              <Text style={styles.headerTitle}>Coding Workspace</Text>
+              <Text style={styles.headerTitle}>
+                Coding Workspace
+              </Text>
               <Text style={styles.headerSubtitle}>
                 Python Assessment
               </Text>
@@ -139,29 +196,31 @@ export default function CodingWorkspaceScreen() {
           </View>
 
           {/* ASSESSMENT QUESTION */}
-
           <View style={styles.questionCard}>
-            <Text style={styles.sectionLabel}>ASSESSMENT 02</Text>
+            <Text style={styles.sectionLabel}>
+              ASSESSMENT 02
+            </Text>
 
             <Text style={styles.questionTitle}>
               Conditional Statements
             </Text>
 
             <Text style={styles.questionText}>
-              Write a Python program that asks the user to enter
-              their mark and displays the correct result.
+              Write a Python program that asks the user
+              to enter their mark and displays the
+              correct result.
             </Text>
 
             <Text style={styles.requirement}>
-              ÔÇó 75 or above: Distinction
+              {"• 75 or above: Distinction"}
             </Text>
 
             <Text style={styles.requirement}>
-              ÔÇó 50 to 74: Pass
+              {"• 50 to 74: Pass"}
             </Text>
 
             <Text style={styles.requirement}>
-              ÔÇó Below 50: Fail
+              {"• Below 50: Fail"}
             </Text>
 
             <Text style={styles.questionNote}>
@@ -169,43 +228,58 @@ export default function CodingWorkspaceScreen() {
             </Text>
           </View>
 
-          {/* CODE EDITOR */}
-
+          {/* CODE EDITOR HEADER */}
           <View style={styles.editorHeader}>
-            <Text style={styles.sectionTitle}>Code Editor</Text>
+            <Text style={styles.sectionTitle}>
+              Code Editor
+            </Text>
 
             <View style={styles.languageBadge}>
-              <Text style={styles.languageText}>Python</Text>
+              <Text style={styles.languageText}>
+                Python
+              </Text>
             </View>
           </View>
 
+          {/* CODE EDITOR */}
           <View style={styles.editorContainer}>
             <View style={styles.editorToolbar}>
-              <Text style={styles.fileName}>main.py</Text>
-              <Text style={styles.editorStatus}>Editing</Text>
+              <Text style={styles.fileName}>
+                main.py
+              </Text>
+
+              <Text style={styles.editorStatus}>
+                Editing
+              </Text>
             </View>
 
             <View style={styles.codeArea}>
-              {/* Line numbers */}
-
+              {/* LINE NUMBERS */}
               <View style={styles.lineNumbers}>
                 {Array.from(
-                  { length: Math.max(10, code.split("\n").length) },
+                  {
+                    length: Math.max(
+                      10,
+                      code.split("\n").length
+                    ),
+                  },
                   (_, index) => (
-                    <Text key={index} style={styles.lineNumber}>
+                    <Text
+                      key={index}
+                      style={styles.lineNumber}
+                    >
                       {index + 1}
                     </Text>
                   )
                 )}
               </View>
 
-              {/* Student code */}
-
+              {/* PYTHON INPUT */}
               <TextInput
                 style={styles.codeInput}
                 value={code}
                 onChangeText={setCode}
-                multiline
+                multiline={true}
                 autoCapitalize="none"
                 autoCorrect={false}
                 spellCheck={false}
@@ -218,91 +292,129 @@ export default function CodingWorkspaceScreen() {
             </View>
           </View>
 
-          {/* ACTION BUTTONS */}
-
+          {/* RUN AND AI HELP */}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={styles.runButton}
               onPress={runCode}
             >
-              <Text style={styles.runButtonText}>ÔûÂ Run Code</Text>
+              <Text style={styles.runButtonText}>
+                ▶ Run Code
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.aiButton}
               onPress={openAIHelp}
             >
-              <Text style={styles.aiButtonText}>AI Help</Text>
+              <Text style={styles.aiButtonText}>
+                AI Help
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* CAMERA AND SCREENSHOT ASSISTANCE */}
+          {/* CAMERA ASSISTANT */}
+          <Text style={styles.sectionTitle}>
+            Camera Code Assistant
+          </Text>
 
-          <Text style={styles.sectionTitle}>Camera Code Assistant</Text>
           <Text style={styles.cameraDescription}>
-            Take a photo of code or an error on your computer screen,
-            or upload an existing screenshot.
+            Take a photo of code or an error on your
+            computer screen, or upload an existing
+            screenshot.
           </Text>
 
           <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.cameraButton} onPress={takePhoto}>
-              <Text style={styles.cameraButtonText}>­ƒôÀ Take Photo</Text>
+            <TouchableOpacity
+              style={styles.cameraButton}
+              onPress={takePhoto}
+            >
+              <Text style={styles.cameraButtonText}>
+                📷 Take Photo
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.galleryButton}
               onPress={uploadScreenshot}
             >
-              <Text style={styles.galleryButtonText}>­ƒû╝´©Å Upload Screenshot</Text>
+              <Text style={styles.galleryButtonText}>
+                Upload Screenshot
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {selectedImage && (
+          {/* IMAGE PREVIEW */}
+          {selectedImage !== null && (
             <View style={styles.previewCard}>
-              <Text style={styles.previewTitle}>Selected Image</Text>
+              <Text style={styles.previewTitle}>
+                Selected Image
+              </Text>
+
               <Image
                 source={{ uri: selectedImage }}
                 style={styles.imagePreview}
                 resizeMode="contain"
               />
+
               <TouchableOpacity
                 style={styles.removeImageButton}
                 onPress={() => setSelectedImage(null)}
               >
-                <Text style={styles.removeImageText}>Remove Photo</Text>
+                <Text style={styles.removeImageText}>
+                  Remove Photo
+                </Text>
               </TouchableOpacity>
             </View>
           )}
 
+          {/* ANALYZE IMAGE */}
           <TouchableOpacity
-            style={[styles.analyzeButton, !selectedImage && styles.disabledButton]}
+            style={[
+              styles.analyzeButton,
+              !selectedImage && styles.disabledButton,
+            ]}
             onPress={analyzeImage}
             disabled={!selectedImage}
           >
-            <Text style={styles.analyzeButtonText}>­ƒñû Analyze Image with AI</Text>
+            <Text style={styles.analyzeButtonText}>
+              Analyze Image with AI
+            </Text>
           </TouchableOpacity>
+
           <Text style={styles.cameraNote}>
-            Image capture is ready. AI image analysis requires a backend connection.
+            Image capture is ready. AI image analysis
+            requires a backend connection.
           </Text>
 
-          {/* OUTPUT AREA */}
-
-          <Text style={styles.sectionTitle}>Output</Text>
+          {/* OUTPUT */}
+          <Text style={styles.sectionTitle}>
+            Output
+          </Text>
 
           <View style={styles.outputCard}>
-            <Text style={styles.outputLabel}>CONSOLE</Text>
+            <Text style={styles.outputLabel}>
+              CONSOLE
+            </Text>
 
-            <Text style={styles.outputText}>{output}</Text>
+            <Text style={styles.outputText}>
+              {output}
+            </Text>
           </View>
 
-          {/* SUBMIT BUTTON */}
-
+          {/* SUBMIT CODE */}
           <TouchableOpacity
-            style={styles.submitButton}
-            onPress={submitCode}
+            style={[
+              styles.submitButton,
+              submitting && styles.disabledButton,
+            ]}
+            onPress={handleSubmit}
+            disabled={submitting}
           >
             <Text style={styles.submitButtonText}>
-              Submit Code
+              {submitting
+                ? "Submitting..."
+                : "Submit Code"}
             </Text>
           </TouchableOpacity>
 
@@ -528,6 +640,101 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
+  cameraDescription: {
+    color: "#AAAAAA",
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+
+  cameraButton: {
+    flex: 1,
+    backgroundColor: "#8B5CF6",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  cameraButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+
+  galleryButton: {
+    flex: 1,
+    backgroundColor: "#242424",
+    borderWidth: 1,
+    borderColor: "#8B5CF6",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  galleryButtonText: {
+    color: "#A78BFA",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  previewCard: {
+    backgroundColor: "#1A1A1A",
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 14,
+  },
+
+  previewTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "bold",
+    marginBottom: 12,
+  },
+
+  imagePreview: {
+    width: "100%",
+    height: 260,
+    backgroundColor: "#0D0D0D",
+    borderRadius: 8,
+  },
+
+  removeImageButton: {
+    alignItems: "center",
+    paddingTop: 14,
+  },
+
+  removeImageText: {
+    color: "#F87171",
+    fontWeight: "bold",
+  },
+
+  analyzeButton: {
+    backgroundColor: "#8B5CF6",
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 8,
+  },
+
+  disabledButton: {
+    opacity: 0.45,
+  },
+
+  analyzeButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+
+  cameraNote: {
+    color: "#888888",
+    fontSize: 12,
+    marginBottom: 28,
+    lineHeight: 18,
+  },
+
   outputCard: {
     backgroundColor: "#141414",
     borderRadius: 12,
@@ -565,88 +772,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  cameraDescription: {
-    color: "#AAAAAA",
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  cameraButton: {
-    flex: 1,
-    backgroundColor: "#8B5CF6",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cameraButtonText: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "bold",
-  },
-  galleryButton: {
-    flex: 1,
-    backgroundColor: "#242424",
-    borderWidth: 1,
-    borderColor: "#8B5CF6",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  galleryButtonText: {
-    color: "#A78BFA",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  previewCard: {
-    backgroundColor: "#1A1A1A",
-    padding: 14,
-    borderRadius: 12,
-    marginBottom: 14,
-  },
-  previewTitle: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-  imagePreview: {
-    width: "100%",
-    height: 260,
-    backgroundColor: "#0D0D0D",
-    borderRadius: 8,
-  },
-  removeImageButton: {
-    alignItems: "center",
-    paddingTop: 14,
-  },
-  removeImageText: {
-    color: "#F87171",
-    fontWeight: "bold",
-  },
-  analyzeButton: {
-    backgroundColor: "#8B5CF6",
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  disabledButton: {
-    opacity: 0.45,
-  },
-  analyzeButtonText: {
-    color: "#FFFFFF",
-    fontWeight: "bold",
-    fontSize: 14,
-  },
-  cameraNote: {
-    color: "#888888",
-    fontSize: 12,
-    marginBottom: 28,
-    lineHeight: 18,
-  },
-
   footerNote: {
     color: "#777777",
     fontSize: 11,
@@ -654,5 +779,3 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
 });
-
-
