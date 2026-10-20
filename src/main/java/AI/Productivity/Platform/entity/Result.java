@@ -5,18 +5,18 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "results")
+@Table(name = "result")
 public class Result {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "result_id")
+    @Column(name = "resultID")
     private Long resultId;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "userID", nullable = false)
     private String userId;
 
-    @Column(name = "assessment_id", nullable = false)
+    @Column(name = "assessmentID", nullable = false)
     private Integer assessmentId;
 
     @Column(name = "score", precision = 10, scale = 2)

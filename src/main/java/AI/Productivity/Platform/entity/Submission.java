@@ -1,7 +1,6 @@
 package AI.Productivity.Platform.entity;
 
 import jakarta.persistence.*;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -9,66 +8,88 @@ import com.devmate.Entities.Users;
 import com.devmate.Entities.Assessment;
 
 @Entity
-@Table(name = "Submission")
+@Table(name = "submission")
 public class Submission {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "submission_id")
+    @Column(name = "submissionID")
     private Long submissionId;
 
-    // --- MEMBER 3 INTEGRATION ---
     @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private Users user; // Changed from User to Users
+    @JoinColumn(name = "userID", nullable = false)
+    private Users user;
 
     @ManyToOne
-    @JoinColumn(name = "assessment_id", nullable = false)
+    @JoinColumn(name = "assessmentID", nullable = false)
     private Assessment assessment;
-    // ----------------------------
 
-    @Column(name = "source_code", columnDefinition = "TEXT", nullable = false)
+    @Column(name = "sourceCode", columnDefinition = "TEXT")
     private String sourceCode;
 
-    @Column(name = "submitted_at", nullable = false)
-    private LocalDateTime submittedAt;
+    @Column(name = "SubmissionTime")
+    private LocalDateTime submissionTime;
 
-    @Column(name = "attempt_number", nullable = false)
-    private Integer attemptNumber;
-
-    @Column(name = "score", precision = 10, scale =2)
+    @Column(name = "score", precision = 10, scale = 2)
     private BigDecimal score;
 
-    public Submission() {}
+    // Constructors
+    public Submission() {
+    }
 
-    public Submission(Users user, Assessment assessment, String sourceCode, LocalDateTime submittedAt, Integer attemptNumber, BigDecimal score) {
+    public Submission(Users user, Assessment assessment, String sourceCode, LocalDateTime submissionTime, BigDecimal score) {
         this.user = user;
         this.assessment = assessment;
         this.sourceCode = sourceCode;
-        this.submittedAt = submittedAt;
-        this.attemptNumber = attemptNumber;
+        this.submissionTime = submissionTime;
         this.score = score;
     }
 
-    public Long getSubmissionId() { return submissionId; }
-    public void setSubmissionId(Long submissionId) { this.submissionId = submissionId; }
+    // Getters and Setters
+    public Long getSubmissionId() {
+        return submissionId;
+    }
 
-    public Users getUser() { return user; }
-    public void setUser(Users user) { this.user = user; }
+    public void setSubmissionId(Long submissionId) {
+        this.submissionId = submissionId;
+    }
 
-    public Assessment getAssessment() { return assessment; }
-    public void setAssessment(Assessment assessment) { this.assessment = assessment; }
+    public Users getUser() {
+        return user;
+    }
 
-    public String getSourceCode() { return sourceCode; }
-    public void setSourceCode(String sourceCode) { this.sourceCode = sourceCode; }
+    public void setUser(Users user) {
+        this.user = user;
+    }
 
-    public LocalDateTime getSubmittedAt() { return submittedAt; }
-    public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }
+    public Assessment getAssessment() {
+        return assessment;
+    }
 
-    public Integer getAttemptNumber() { return attemptNumber; }
-    public void setAttemptNumber(Integer attemptNumber) { this.attemptNumber = attemptNumber; }
+    public void setAssessment(Assessment assessment) {
+        this.assessment = assessment;
+    }
 
-    public BigDecimal getScore(){
-        return score;}
+    public String getSourceCode() {
+        return sourceCode;
+    }
+
+    public void setSourceCode(String sourceCode) {
+        this.sourceCode = sourceCode;
+    }
+
+    public LocalDateTime getSubmissionTime() {
+        return submissionTime;
+    }
+
+    public void setSubmissionTime(LocalDateTime submissionTime) {
+        this.submissionTime = submissionTime;
+    }
+
+    public BigDecimal getScore() {
+        return score;
+    }
+
     public void setScore(BigDecimal score) {
         this.score = score;
     }

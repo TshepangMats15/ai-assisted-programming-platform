@@ -41,14 +41,13 @@ public class SubmissionService {
 
         LocalDateTime now = LocalDateTime.now();
 
-        // Added 'null' at the end for the ungraded score
+        // 5-parameter constructor matching Submission.java (user, assessment, sourceCode, submissionTime, score)
         Submission submission = new Submission(
                 user,
                 assessment,
                 request.sourceCode(),
                 now,
-                request.attemptNumber(),
-                null
+                null // ungraded score
         );
 
         Submission savedSubmission = submissionRepository.save(submission);
