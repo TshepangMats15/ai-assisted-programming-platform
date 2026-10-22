@@ -1,0 +1,8 @@
+target/
+.git/
+.idea/
+.vscode/
+.env
+*.log
+*serviceAccount*.json
+*service-account*.json
