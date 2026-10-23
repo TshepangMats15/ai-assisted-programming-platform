@@ -3,7 +3,7 @@ package com.devmate.Controller;
 
 import com.devmate.Services.AnalyticsServices;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,7 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-@CrossOrigin(origins = "*")
+
 @RestController
 @RequestMapping("/api/analytics")
 public class AnalyticsController {

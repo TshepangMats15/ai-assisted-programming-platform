@@ -7,9 +7,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
-
-@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/api/ai")
 public class AIPromptController {
@@ -39,7 +38,13 @@ public class AIPromptController {
         } catch (IllegalArgumentException exception) {
             return ResponseEntity
                     .badRequest()
-                    .body(exception.getMessage());
+                    .body(Map.of("error", exception.getMessage()));
+        } catch (Exception exception) {
+            exception.printStackTrace();
+            return ResponseEntity
+                    .internalServerError()
+                    .body(Map.of("error",
+                            "Prompt failed: " + exception.getMessage()));
         }
     }
 

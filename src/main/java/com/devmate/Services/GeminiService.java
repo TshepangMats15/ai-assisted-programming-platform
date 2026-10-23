@@ -1,35 +1,34 @@
 package com.devmate.Services;
 
 import com.google.genai.Client;
-import com.google.genai.gaos.models.interactions.CreateModelInteraction;
-import com.google.genai.gaos.models.interactions.Interaction;
-import com.google.genai.gaos.models.interactions.InteractionsInput;
-import com.google.genai.gaos.models.interactions.Model;
-import com.google.genai.gaos.models.operations.CreateInteractionRequestBody;
-
+import com.google.genai.types.GenerateContentResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class GeminiService {
+
     private final Client client;
+    private final String model;
 
     public GeminiService(
-            @Value("${gemini.api.key}") String apiKey) {
-        this.client = Client.builder()
-                .apiKey(apiKey)
-                .build();
+            @Value("${gemini.api.key}") String apiKey,
+            @Value("${gemini.model}") String model) {
+        this.client = Client.builder().apiKey(apiKey).build();
+        this.model = model;
     }
 
     public String askGemini(String prompt) {
-        CreateModelInteraction params =
-                CreateModelInteraction.builder()
-                        .model(Model.of("gemini-3.8-flash"))
-                        .input(InteractionsInput.of("Hello, how may I help you today?"))
-                        .build();
-        Interaction interaction =
-                client.interactions.create(CreateInteractionRequestBody.of(params)).interaction().get();
-        return interaction.outputText().orElse("Gemini did not return a response.");
+        if (prompt == null || prompt.isBlank()) {
+            throw new IllegalArgumentException("The prompt is empty.");
+        }
+
+        GenerateContentResponse response =
+                client.models.generateContent(model, prompt, null);
+
+        String answer = response.text();
+        return (answer == null || answer.isBlank())
+                ? "Gemini did not return a response."
+                : answer;
     }
 }
-
