@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.GetMapping;
         "com.devmate.Repository"
 })
 @RestController
-@CrossOrigin(origins = "*")
 public class AiProductivityPlatformApplication {
 
     public static void main(String[] args) {
