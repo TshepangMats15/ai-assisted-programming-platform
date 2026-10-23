@@ -1,16 +1,17 @@
 package com.devmate.Entities;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
-import org.hibernate.annotations.Audited;
+import jakarta.persistence.Table;
 
-
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Audited.Table(name = "users")
+@Table(name = "users")
 public class Users {
 
     @Id
@@ -23,17 +24,22 @@ public class Users {
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
+    // Accepted in requests, never sent back in responses
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @Column(name = "password", nullable = false)
     private String password;
 
     @Column(name = "role", nullable = false)
     private String role;
 
-    public enum Role{
-        STUDENT,
-        ADMIN,
+    @Column(name = "last_active")
+    private LocalDateTime lastActive;
 
+    public enum Role {
+        STUDENT,
+        ADMIN
     }
+
     // Default constructor required by JPA
     public Users() {
     }
@@ -54,36 +60,21 @@ public class Users {
         }
     }
 
-    // Getters and Setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
 
-    public String getId() {
-        return id;
-    }
-    public void setId(String id) {
-        this.id = id;
-    }
-    public String getFullName() {
-        return fullName;
-    }
-    public void setFullName(String fullName) {
-        this.fullName = fullName;
-    }
-    public String getEmail() {
-        return email;
-    }
-    public void setEmail(String email) {
-        this.email = email;
-    }
-    public String getPassword() {
-        return password;
-    }
-    public void setPassword(String password) {
-        this.password = password;
-    }
-    public String getRole() {
-        return role;
-    }
-    public void setRole(String role) {
-        this.role = role;
-    }
+    public String getFullName() { return fullName; }
+    public void setFullName(String fullName) { this.fullName = fullName; }
+
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+
+    public LocalDateTime getLastActive() { return lastActive; }
+    public void setLastActive(LocalDateTime lastActive) { this.lastActive = lastActive; }
 }
