@@ -10,7 +10,9 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/coursework")
+@CrossOrigin(origins = "*")
 public class CourseworkController {
+
     private final CourseworkServices courseworkServices;
 
     public CourseworkController(CourseworkServices courseworkServices) {
@@ -39,10 +41,17 @@ public class CourseworkController {
         );
     }
 
-    // READ ONE
+    // READ ONE (Supports diagnostic gating when ?userId= is passed)
     @GetMapping("/{courseID}")
     public ResponseEntity<Coursework> getCourseworkById(
-            @PathVariable String courseID) {
+            @PathVariable String courseID,
+            @RequestParam(required = false) String userId) {
+
+        if (userId != null && !userId.trim().isEmpty()) {
+            return ResponseEntity.ok(
+                    courseworkServices.getGatedCourseworkById(courseID, userId)
+            );
+        }
 
         return ResponseEntity.ok(
                 courseworkServices.getCourseworkById(courseID)
@@ -73,4 +82,3 @@ public class CourseworkController {
         return ResponseEntity.noContent().build();
     }
 }
-

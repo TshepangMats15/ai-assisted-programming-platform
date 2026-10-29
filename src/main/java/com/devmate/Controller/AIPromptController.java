@@ -11,6 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai")
+@CrossOrigin(origins = "*")
 public class AIPromptController {
 
     private final AIPromptServices promptService;
@@ -35,10 +36,18 @@ public class AIPromptController {
                     .status(HttpStatus.CREATED)
                     .body(interaction);
 
+        } catch (IllegalStateException exception) {
+            // AI Access restricted for Pre-Assessments (ai_allowed: false)
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", exception.getMessage()));
+
         } catch (IllegalArgumentException exception) {
+            // Missing required parameters (userID, assessmentID, prompt)
             return ResponseEntity
                     .badRequest()
                     .body(Map.of("error", exception.getMessage()));
+
         } catch (Exception exception) {
             exception.printStackTrace();
             return ResponseEntity
@@ -57,13 +66,11 @@ public class AIPromptController {
     }
 
     @GetMapping("/interactions/assessment/{assessmentID}")
-    public ResponseEntity<List<AIInteraction>>
-    getAssessmentInteractions(
+    public ResponseEntity<List<AIInteraction>> getAssessmentInteractions(
             @PathVariable Integer assessmentID) {
 
         return ResponseEntity.ok(
-                promptService.getAssessmentInteractions(
-                        assessmentID));
+                promptService.getAssessmentInteractions(assessmentID));
     }
 
     public static class PromptRequest {
