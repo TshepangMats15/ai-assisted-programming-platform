@@ -1,6 +1,8 @@
-// DevMate Student Coursework Screen
 
+import React from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
 import {
   SafeAreaView,
   ScrollView,
@@ -10,48 +12,75 @@ import {
   View,
 } from "react-native";
 
-// Temporary coursework data for testing the frontend
-const coursework = [
-  {
-    id: 1,
-    title: "Python Variables and Data Types",
-    course: "Python Programming",
-    dueDate: "Due date to be confirmed",
-    status: "Not Started",
-  },
-  {
-    id: 2,
-    title: "Conditional Statements",
-    course: "Python Programming",
-    dueDate: "Due date to be confirmed",
-    status: "In Progress",
-  },
-  {
-    id: 3,
-    title: "HTML and CSS Basics",
-    course: "Introduction to Web Design",
-    dueDate: "Due date to be confirmed",
-    status: "Not Started",
-  },
-];
+import { useAppTheme } from "../context/ThemeContext";
+
+type CourseworkItem = {
+  id: number;
+  title: string;
+  course: string;
+  dueDate: string;
+  status: "Not Started" | "In Progress" | "Completed";
+};
+
+// Real coursework will be loaded from the backend.
+// No demonstration assignments are displayed.
+const coursework: CourseworkItem[] = [];
 
 export default function CourseworkScreen() {
+  const { colors, isDark } = useAppTheme();
+
+  const purple = "#8B5CF6";
+  const purpleText = isDark ? "#A78BFA" : "#6D28D9";
+
+  const total = coursework.length;
+
+  const inProgress = coursework.filter(
+    (item) => item.status === "In Progress"
+  ).length;
+
+  const completed = coursework.filter(
+    (item) => item.status === "Completed"
+  ).length;
+
   return (
-    <SafeAreaView style={styles.container}>
-
-      {/* ================= HEADER ================= */}
-
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: colors.background },
+      ]}
+    >
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
           style={styles.backButton}
+          onPress={() => router.back()}
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Ionicons
+            name="chevron-back"
+            size={18}
+            color={purple}
+          />
+
+          <Text style={styles.backText}>
+            Back
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>My Coursework</Text>
+        <Text
+          style={[
+            styles.title,
+            { color: colors.text },
+          ]}
+        >
+          My Coursework
+        </Text>
 
-        <Text style={styles.subtitle}>
+        <Text
+          style={[
+            styles.subtitle,
+            { color: colors.textSecondary },
+          ]}
+        >
           View your assignments and programming activities.
         </Text>
       </View>
@@ -60,117 +89,270 @@ export default function CourseworkScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-
-        {/* ================= OVERVIEW ================= */}
-
-        <View style={styles.overviewCard}>
-          <Text style={styles.overviewTitle}>
+        {/* COURSEWORK OVERVIEW */}
+        <View
+          style={[
+            styles.overviewCard,
+            { backgroundColor: colors.backgroundElement },
+          ]}
+        >
+          <Text
+            style={[
+              styles.overviewTitle,
+              { color: colors.text },
+            ]}
+          >
             Coursework Overview
           </Text>
 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>3</Text>
-              <Text style={styles.statLabel}>Total</Text>
+              <Text style={styles.statNumber}>
+                {total}
+              </Text>
+
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Total
+              </Text>
             </View>
 
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>1</Text>
-              <Text style={styles.statLabel}>In Progress</Text>
+              <Text style={styles.statNumber}>
+                {inProgress}
+              </Text>
+
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                In Progress
+              </Text>
             </View>
 
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={styles.statNumber}>
+                {completed}
+              </Text>
+
+              <Text
+                style={[
+                  styles.statLabel,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                Completed
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* ================= COURSEWORK LIST ================= */}
-
-        <Text style={styles.sectionTitle}>
+        {/* ASSIGNMENTS */}
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: colors.text },
+          ]}
+        >
           Your Assignments
         </Text>
 
-        {coursework.map((item) => (
-          <View key={item.id} style={styles.courseworkCard}>
+        {coursework.length === 0 ? (
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="document-text-outline"
+              size={42}
+              color={purple}
+            />
 
-            <View style={styles.cardTop}>
-              <Text style={styles.courseName}>
-                {item.course}
-              </Text>
-
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>
-                  {item.status}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.assignmentTitle}>
-              {item.title}
-            </Text>
-
-            <Text style={styles.dueDate}>
-              {item.dueDate}
-            </Text>
-
-            <TouchableOpacity
-              style={styles.viewButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/assessments",
-                  params: { courseworkId: String(item.id) },
-                })
-              }
+            <Text
+              style={[
+                styles.emptyTitle,
+                { color: colors.text },
+              ]}
             >
-              <Text style={styles.viewButtonText}>
-                View Assessments →
-              </Text>
-            </TouchableOpacity>
+              No assignments available
+            </Text>
 
+            <Text
+              style={[
+                styles.emptyDescription,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Your assignments will appear here once
+              coursework is available.
+            </Text>
           </View>
-        ))}
+        ) : (
+          coursework.map((item) => (
+            <View
+              key={item.id}
+              style={[
+                styles.courseworkCard,
+                {
+                  backgroundColor: colors.backgroundElement,
+                },
+              ]}
+            >
+              <View style={styles.cardTop}>
+                <Text
+                  style={[
+                    styles.courseName,
+                    { color: purpleText },
+                  ]}
+                >
+                  {item.course}
+                </Text>
 
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor: isDark
+                        ? "#2D2140"
+                        : "#EDE9FE",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: purpleText },
+                    ]}
+                  >
+                    {item.status}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={[
+                  styles.assignmentTitle,
+                  { color: colors.text },
+                ]}
+              >
+                {item.title}
+              </Text>
+
+              <Text
+                style={[
+                  styles.dueDate,
+                  { color: colors.textSecondary },
+                ]}
+              >
+                {item.dueDate}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.viewButton}
+                onPress={() =>
+                  router.push({
+                    pathname: "/assessments",
+                    params: {
+                      courseworkId: String(item.id),
+                    },
+                  })
+                }
+              >
+                <Text style={styles.viewButtonText}>
+                  View Assessments
+                </Text>
+
+                <Ionicons
+                  name="arrow-forward"
+                  size={16}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
       </ScrollView>
 
-      {/* ================= BOTTOM NAVIGATION ================= */}
-
-      <View style={styles.bottomNavigation}>
-
+      {/* BOTTOM NAVIGATION */}
+      <View
+        style={[
+          styles.bottomNavigation,
+          {
+            backgroundColor: colors.backgroundElement,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.replace("/dashboard")}
         >
-          <Text style={styles.navIcon}>⌂</Text>
-          <Text style={styles.navText}>Home</Text>
+          <Ionicons
+            name="home-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              { color: colors.textSecondary },
+            ]}
+          >
+            Home
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.replace("/learn")}
         >
-          <Text style={styles.navIcon}>▤</Text>
-          <Text style={styles.navText}>Learn</Text>
+          <Ionicons
+            name="book-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              { color: colors.textSecondary },
+            ]}
+          >
+            Learn
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.activeNavIcon}>▣</Text>
-          <Text style={styles.activeNavText}>Coursework</Text>
+          <Ionicons
+            name="document-text"
+            size={22}
+            color={purple}
+          />
+
+          <Text style={styles.activeNavText}>
+            Coursework
+          </Text>
         </TouchableOpacity>
-
       </View>
-
     </SafeAreaView>
   );
 }
 
-// ================= STYLES =================
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D0D0D",
   },
 
   header: {
@@ -180,7 +362,10 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
+    gap: 3,
   },
 
   backText: {
@@ -190,31 +375,27 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#FFFFFF",
     fontSize: 28,
     fontWeight: "bold",
   },
 
   subtitle: {
-    color: "#A3A3A3",
     fontSize: 14,
     marginTop: 5,
   },
 
   scrollContent: {
     padding: 20,
-    paddingBottom: 120,
+    paddingBottom: 80,
   },
 
   overviewCard: {
-    backgroundColor: "#1A1A1A",
     borderRadius: 12,
     padding: 20,
     marginBottom: 25,
   },
 
   overviewTitle: {
-    color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "bold",
     marginBottom: 20,
@@ -237,20 +418,17 @@ const styles = StyleSheet.create({
   },
 
   statLabel: {
-    color: "#A3A3A3",
     fontSize: 12,
     marginTop: 5,
   },
 
   sectionTitle: {
-    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 15,
   },
 
   courseworkCard: {
-    backgroundColor: "#1A1A1A",
     borderRadius: 12,
     padding: 18,
     marginBottom: 15,
@@ -264,34 +442,29 @@ const styles = StyleSheet.create({
   },
 
   courseName: {
-    color: "#A78BFA",
     fontSize: 12,
     fontWeight: "600",
     flex: 1,
   },
 
   statusBadge: {
-    backgroundColor: "#2D2140",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
 
   statusText: {
-    color: "#A78BFA",
     fontSize: 10,
     fontWeight: "bold",
   },
 
   assignmentTitle: {
-    color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "bold",
     marginBottom: 10,
   },
 
   dueDate: {
-    color: "#888888",
     fontSize: 12,
     marginBottom: 18,
   },
@@ -301,6 +474,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 13,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
 
   viewButtonText: {
@@ -309,13 +485,31 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  // ================= BOTTOM NAVIGATION STYLES =================
+  emptyCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 28,
+    alignItems: "center",
+    marginTop: 8,
+  },
+
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "bold",
+    marginTop: 14,
+    textAlign: "center",
+  },
+
+  emptyDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 8,
+  },
 
   bottomNavigation: {
     flexDirection: "row",
-    backgroundColor: "#1A1A1A",
     borderTopWidth: 1,
-    borderTopColor: "#333333",
     paddingVertical: 12,
     paddingHorizontal: 10,
     justifyContent: "space-around",
@@ -327,27 +521,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 5,
-  },
-
-  navIcon: {
-    color: "#888888",
-    fontSize: 23,
-    marginBottom: 5,
+    gap: 5,
   },
 
   navText: {
-    color: "#888888",
     fontSize: 11,
   },
 
-  activeNavIcon: {
-    color: "#8B5CF6",
-    fontSize: 23,
-    marginBottom: 5,
-  },
-
   activeNavText: {
-    color: "#A78BFA",
+    color: "#8B5CF6",
     fontSize: 11,
     fontWeight: "bold",
   },

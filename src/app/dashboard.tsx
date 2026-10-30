@@ -1,500 +1,111 @@
-// DevMate Student Home / Dashboard
-import { router } from "expo-router";
 
-import {
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+// DevMate Student Home / Dashboard
+import React from "react";
+import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { auth } from "../services/firebase";
+import { useAppTheme } from "../context/ThemeContext";
 
 export default function DashboardScreen() {
+  const { isDark, colors } = useAppTheme();
+  const student = auth.currentUser;
+
+  // Extract student's first name dynamically
+  const fullName = student?.displayName?.trim() || "Student";
+  const firstName = fullName.split(" ")[0];
+  const profileLetter = firstName.charAt(0).toUpperCase();
+
+  const background = colors.background;
+  const cardBackground = isDark ? "#1A1A1A" : "#FFFFFF";
+  const primaryText = isDark ? "#FFFFFF" : "#171717";
+  const secondaryText = isDark ? "#A3A3A3" : "#666666";
+  const borderColor = isDark ? "#292929" : "#E5E7EB";
+  const purple = "#8B5CF6";
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-
-        {/* ================= HEADER ================= */}
-
+    <SafeAreaView style={[styles.container, { backgroundColor: background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* STUDENT HEADER */}
         <View style={styles.header}>
-          <View style={styles.profileSection}>
+          <TouchableOpacity style={styles.profileSection} onPress={() => router.push("/profile")}>
             <View style={styles.profileCircle}>
-              <Text style={styles.profileLetter}>S</Text>
+              <Text style={styles.profileLetter}>{profileLetter}</Text>
             </View>
 
-            <View>
-              <Text style={styles.greeting}>Hi, Student</Text>
-              <Text style={styles.subGreeting}>
+            <View style={styles.greetingContainer}>
+              <Text style={[styles.greeting, { color: primaryText }]} numberOfLines={1}>
+                Hi, {firstName}
+              </Text>
+              <Text style={[styles.subGreeting, { color: secondaryText }]}>
                 Let's start learning...
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
 
-          <TouchableOpacity style={styles.notificationButton}
-            onPress={()=> router.push("/notifications")}>
-            <Text style={styles.notificationIcon}
-            onPress={()=> router.push("/notifications")}>â—</Text>
+          <TouchableOpacity
+            style={[styles.notificationButton, { backgroundColor: cardBackground }]}
+            onPress={() => router.push("/notifications")}
+          >
+            <Ionicons name="notifications-outline" size={22} color={purple} />
           </TouchableOpacity>
         </View>
 
-
-        {/* ================= ANNOUNCEMENTS ================= */}
-
+        {/* ANNOUNCEMENTS FROM ADMIN */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Announcements</Text>
-
-          <TouchableOpacity>
-            <Text style={styles.seeAll}>See all</Text>
-          </TouchableOpacity>
+          <Text style={[styles.sectionTitle, { color: primaryText }]}>Announcements</Text>
         </View>
 
-        <View style={styles.announcementCard}>
-          <View style={styles.announcementTag}>
-            <Text style={styles.tagText}>NEW</Text>
-          </View>
-
-          <Text style={styles.announcementTitle}>
-            Welcome to DevMate
-          </Text>
-
-          <Text style={styles.announcementText}>
-            Start learning programming, complete your coursework
-            and improve your coding skills.
+        <View style={[styles.emptyCard, { backgroundColor: cardBackground, borderColor }]}>
+          <Ionicons name="megaphone-outline" size={28} color={purple} />
+          <Text style={[styles.emptyTitle, { color: primaryText }]}>No announcements available</Text>
+          <Text style={[styles.emptyDescription, { color: secondaryText }]}>
+            Admin announcements will appear here.
           </Text>
         </View>
 
-
-        {/* ================= MY PROGRESS ================= */}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My Progress</Text>
-
-          <TouchableOpacity style={styles.actionButton}
-            onPress={()=> router.push("/progress")}>
-            <Text style={styles.seeAll}>Details</Text>
-          </TouchableOpacity>
-        </View>
-
-
-        {/* Python Course */}
-
-        <View style={styles.courseCard}>
-          <View style={styles.courseTop}>
-            <View>
-              <Text style={styles.courseTitle}>
-                Basics of Python Programming
-              </Text>
-
-              <Text style={styles.courseLessons}>
-                Programming Fundamentals
-              </Text>
-            </View>
-
-            <Text style={styles.percentage}>70%</Text>
-          </View>
-
-          <View style={styles.progressBackground}>
-            <View
-              style={[
-                styles.progressBar,
-                { width: "70%" },
-              ]}
-            />
-          </View>
-        </View>
-
-
-        {/* Web Design Course */}
-
-        <View style={styles.courseCard}>
-          <View style={styles.courseTop}>
-            <View>
-              <Text style={styles.courseTitle}>
-                Introduction to Web Design
-              </Text>
-
-              <Text style={styles.courseLessons}>
-                Web Development
-              </Text>
-            </View>
-
-            <Text style={styles.percentage}>45%</Text>
-          </View>
-
-          <View style={styles.progressBackground}>
-            <View
-              style={[
-                styles.progressBar,
-                { width: "45%" },
-              ]}
-            />
-          </View>
-        </View>
-
-
-        {/* ================= QUICK ACTIONS ================= */}
-
-        <Text style={styles.quickTitle}>Quick Actions</Text>
-
+        {/* QUICK ACTIONS */}
+        <Text style={[styles.quickTitle, { color: primaryText }]}>Quick Actions</Text>
         <View style={styles.quickActions}>
-
-          <TouchableOpacity style={styles.actionButton}
-            onPress={()=> router.push("/coding-workspace")}>
-            <Text style={styles.actionSymbol}>+</Text>
-            <Text style={styles.actionText}>New Project</Text>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: cardBackground, borderColor }]}
+            onPress={() => router.push("/coding-workspace")}
+          >
+            <Ionicons name="code-slash-outline" size={27} color={purple} />
+            <Text style={[styles.actionText, { color: primaryText }]}>New Project</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}
-            onPress={()=> router.push("/projects")}>
-            <Text style={styles.actionSymbol}>{"</>"}</Text>
-            <Text style={styles.actionText}>My Projects</Text>
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: cardBackground, borderColor }]}
+            onPress={() => router.push("/projects")}
+          >
+            <Ionicons name="folder-open-outline" size={27} color={purple} />
+            <Text style={[styles.actionText, { color: primaryText }]}>My Projects</Text>
           </TouchableOpacity>
-
         </View>
-
-        <TouchableOpacity style={styles.aiButton}
-          onPress={()=> router.push("/ai-assistance")}>
-          <Text style={styles.aiButtonTitle}>
-            AI Assistant
-          </Text>
-
-          <Text style={styles.aiButtonText}>
-            Get help with your code
-          </Text>
-        </TouchableOpacity>
-
       </ScrollView>
-
-
-      {/* ================= BOTTOM NAVIGATION ================= */}
-
-      <View style={styles.bottomNavigation}>
-
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.activeNavIcon}>âŒ‚</Text>
-          <Text style={styles.activeNavText}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => router.push("/learn")}
-        >
-          <Text style={styles.navIcon}>â–¤</Text>
-          <Text style={styles.navText}>Learn</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem}
-          onPress={()=> router.push("/settings")}>
-          <Text style={styles.navIcon}>âš™</Text>
-          <Text style={styles.navText}>Settings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.navItem}
-          onPress={()=> router.push("/profile")}>
-          <Text style={styles.navIcon}>â—‹</Text>
-          <Text style={styles.navText}>Account</Text>
-        </TouchableOpacity>
-
-      </View>
-
     </SafeAreaView>
   );
 }
 
-
-// ================= STYLES =================
-
 const styles = StyleSheet.create({
-
-  container: {
-    flex: 1,
-
-    // One consistent background colour
-    backgroundColor: "#0D0D0D",
-  },
-
-
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 120,
-  },
-
-
-  // HEADER
-
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 15,
-    marginBottom: 30,
-  },
-
-  profileSection: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  profileCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#8B5CF6",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-
-  profileLetter: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-
-  greeting: {
-    color: "#FFFFFF",
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-
-  subGreeting: {
-    color: "#A3A3A3",
-    fontSize: 13,
-    marginTop: 3,
-  },
-
-  notificationButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  notificationIcon: {
-    color: "#8B5CF6",
-    fontSize: 16,
-  },
-
-
-  // SECTION HEADERS
-
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-    marginTop: 10,
-  },
-
-  sectionTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  seeAll: {
-    color: "#8B5CF6",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-
-  // ANNOUNCEMENT
-
-  announcementCard: {
-    backgroundColor: "#1A1A1A",
-    padding: 18,
-    borderRadius: 12,
-    marginBottom: 25,
-  },
-
-  announcementTag: {
-    alignSelf: "flex-start",
-    backgroundColor: "#8B5CF6",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-
-  tagText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-
-  announcementTitle: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "bold",
-    marginBottom: 6,
-  },
-
-  announcementText: {
-    color: "#B3B3B3",
-    fontSize: 14,
-    lineHeight: 20,
-  },
-
-
-  // COURSE / PROGRESS CARDS
-
-  courseCard: {
-    backgroundColor: "#1A1A1A",
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-
-  courseTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-
-  courseTitle: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-
-  courseLessons: {
-    color: "#888888",
-    fontSize: 12,
-    marginTop: 5,
-  },
-
-  percentage: {
-    color: "#8B5CF6",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-
-  progressBackground: {
-    height: 6,
-    backgroundColor: "#333333",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-
-  progressBar: {
-    height: 6,
-    backgroundColor: "#8B5CF6",
-    borderRadius: 3,
-  },
-
-
-  // QUICK ACTIONS
-
-  quickTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 20,
-    marginBottom: 12,
-  },
-
-  quickActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-
-  actionButton: {
-    flex: 1,
-    backgroundColor: "#1A1A1A",
-    paddingVertical: 18,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  actionSymbol: {
-    color: "#8B5CF6",
-    fontSize: 22,
-    fontWeight: "bold",
-    marginBottom: 7,
-  },
-
-  actionText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-
-
-  // AI BUTTON
-
-  aiButton: {
-    backgroundColor: "#8B5CF6",
-    borderRadius: 12,
-    padding: 18,
-    marginTop: 12,
-  },
-
-  aiButtonTitle: {
-    color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "bold",
-  },
-
-  aiButtonText: {
-    color: "#EDE9FE",
-    fontSize: 13,
-    marginTop: 3,
-  },
-
-
-  // BOTTOM NAVIGATION
-
-  bottomNavigation: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-
-    height: 75,
-
-    backgroundColor: "#151515",
-
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-
-    borderTopWidth: 1,
-    borderTopColor: "#292929",
-  },
-
-  navItem: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  navIcon: {
-    color: "#777777",
-    fontSize: 20,
-    marginBottom: 3,
-  },
-
-  navText: {
-    color: "#777777",
-    fontSize: 11,
-  },
-
-  activeNavIcon: {
-    color: "#8B5CF6",
-    fontSize: 22,
-    marginBottom: 3,
-  },
-
-  activeNavText: {
-    color: "#8B5CF6",
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-
+  container: { flex: 1 },
+  scrollContent: { padding: 20, paddingBottom: 35 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 15, marginBottom: 25 },
+  profileSection: { flexDirection: "row", alignItems: "center", flex: 1 },
+  profileCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#8B5CF6", justifyContent: "center", alignItems: "center", marginRight: 12 },
+  profileLetter: { color: "#FFFFFF", fontSize: 18, fontWeight: "bold" },
+  greetingContainer: { flex: 1 },
+  greeting: { fontSize: 20, fontWeight: "bold" },
+  subGreeting: { fontSize: 13, marginTop: 2 },
+  notificationButton: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center" },
+  sectionHeader: { marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: "bold" },
+  emptyCard: { padding: 20, borderRadius: 12, borderWidth: 1, alignItems: "center", marginBottom: 20 },
+  emptyTitle: { fontSize: 15, fontWeight: "bold", marginTop: 10 },
+  emptyDescription: { fontSize: 13, marginTop: 4, textAlign: "center" },
+  quickTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 12 },
+  quickActions: { flexDirection: "row", gap: 12 },
+  actionButton: { flex: 1, borderWidth: 1, paddingVertical: 20, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 8 },
+  actionText: { fontSize: 14, fontWeight: "600" },
 });

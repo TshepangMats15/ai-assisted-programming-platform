@@ -17,17 +17,19 @@ export async function askAI(
     throw new Error("Please sign in before using AI Assistance.");
   }
 
-  // API_BASE_URL may already end with /api.
+  // Remove trailing slashes from the backend URL.
   const baseUrl = API_BASE_URL.replace(/\/+$/, "");
+
+  // Support backend URLs with or without /api.
   const endpoint = baseUrl.endsWith("/api")
     ? `${baseUrl}/ai/ask`
     : `${baseUrl}/api/ai/ask`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    AI_TIMEOUT_MS
-  );
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, AI_TIMEOUT_MS);
 
   try {
     const response = await fetch(endpoint, {
@@ -37,22 +39,38 @@ export async function askAI(
         Accept: "text/plain, application/json",
         Authorization: `Bearer ${firebaseToken}`,
       },
-      body: JSON.stringify({ prompt: question }),
+      body: JSON.stringify({
+        prompt: question,
+      }),
       signal: controller.signal,
     });
 
-    const text = await response.text();
+    const responseText = await response.text();
 
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error(
+          "Your login session could not be verified. Please sign in again."
+        );
+      }
+
+      if (response.status === 403) {
+        throw new Error(
+          "You do not have permission to access DevMate AI."
+        );
+      }
+
       throw new Error(
         `AI backend error ${response.status}: ${
-          text || response.statusText
+          responseText || response.statusText
         }`
       );
     }
 
-    if (!text.trim()) {
-      throw new Error("The AI backend returned an empty response.");
+    if (!responseText.trim()) {
+      throw new Error(
+        "The AI backend returned an empty response."
+      );
     }
 
     const contentType =
@@ -62,7 +80,7 @@ export async function askAI(
       let data: unknown;
 
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(responseText);
       } catch {
         throw new Error(
           "The AI backend returned invalid JSON."
@@ -87,15 +105,15 @@ export async function askAI(
       );
     }
 
-    return text;
-  } catch (error) {
+    return responseText;
+  } catch (error: unknown) {
     if (
       error instanceof Error &&
       error.name === "AbortError"
     ) {
       throw new Error(
         "The AI request timed out after 90 seconds. " +
-          "Check whether the Render backend is running."
+          "Please try again."
       );
     }
 

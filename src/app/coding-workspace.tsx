@@ -1,9 +1,15 @@
 
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useAppTheme } from "../context/ThemeContext";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import api from "../constants/api";
+import {
+  analyseCodeImage,
+  formatRunResult,
+  runCode as runCodeRemote,
+} from "../services/Codeaiservices";
 
 import {
   Alert,
@@ -30,7 +36,8 @@ type Language =
   | "C#"
   | "HTML"
   | "CSS"
-  | "SQL";
+  | "SQL"
+  | "JSON";
 
 const languages: Language[] = [
   "Auto Detect",
@@ -44,6 +51,7 @@ const languages: Language[] = [
   "HTML",
   "CSS",
   "SQL",
+  "JSON",
 ];
 
 // Detect the likely programming language from the code
@@ -51,6 +59,11 @@ function detectLanguage(code: string): string {
   const text = code.trim();
 
   if (!text) return "Not detected";
+
+  if ((text.startsWith("{") && text.endsWith("}")) ||
+      (text.startsWith("[") && text.endsWith("]"))) {
+    try { JSON.parse(text); return "JSON"; } catch { /* not JSON */ }
+  }
 
   if (/<(!DOCTYPE html|html|head|body|div|span)\b/i.test(text)) {
     return "HTML";
@@ -97,9 +110,25 @@ function detectLanguage(code: string): string {
 
 export default function CodingWorkspaceScreen() {
   // Get the assessment selected by the student
-  const { assessmentId } = useLocalSearchParams<{
+  const { colors, isDark } = useAppTheme();
+  const params = useLocalSearchParams<{
     assessmentId?: string;
+    title?: string;
+    question?: string;
+    language?: string;
+    code?: string;
   }>();
+  const { assessmentId } = params;
+  const themeStyles = useMemo(() => ({
+    surface: { backgroundColor: colors.backgroundElement },
+    text: { color: colors.text },
+    secondary: { color: colors.textSecondary },
+    border: { borderColor: colors.border },
+    editor: { backgroundColor: isDark ? "#141414" : "#F8F7FC", borderColor: colors.border },
+    toolbar: { backgroundColor: isDark ? "#202020" : "#EEEAF5" },
+    accentSurface: { backgroundColor: isDark ? "#2D2140" : "#EDE9FE" },
+    accentText: { color: isDark ? "#C4B5FD" : "#6D28D9" },
+  }), [colors, isDark]);
 
   // Validate the assessment ID before submitting
   const selectedAssessmentId = Number(assessmentId);
@@ -110,11 +139,11 @@ export default function CodingWorkspaceScreen() {
     selectedAssessmentId > 0;
 
   // Start with an empty editor
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(typeof params.code === "string" ? params.code : "");
 
   // Selected programming language
   const [selectedLanguage, setSelectedLanguage] =
-    useState<Language>("Auto Detect");
+    useState<Language>(languages.includes(params.language as Language) ? params.language as Language : "Auto Detect");
 
   // Show or hide language options
   const [showLanguages, setShowLanguages] = useState(false);
@@ -132,6 +161,9 @@ export default function CodingWorkspaceScreen() {
 
   // Store the photo selected by the student
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageType, setSelectedImageType] = useState<string | null>(null);
+  const [analysing, setAnalysing] = useState(false);
+  const [running, setRunning] = useState(false);
 
   // Prevent repeated submissions
   const [submitting, setSubmitting] = useState(false);
@@ -158,6 +190,7 @@ export default function CodingWorkspaceScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         setSelectedImage(result.assets[0].uri);
+        setSelectedImageType(result.assets[0].mimeType ?? null);
       }
     } catch (error) {
       Alert.alert(
@@ -178,6 +211,7 @@ export default function CodingWorkspaceScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         setSelectedImage(result.assets[0].uri);
+        setSelectedImageType(result.assets[0].mimeType ?? null);
       }
     } catch (error) {
       Alert.alert(
@@ -187,8 +221,8 @@ export default function CodingWorkspaceScreen() {
     }
   }
 
-  // The AI image endpoint still needs to be connected
-  function analyzeImage() {
+  // Send the selected photo to the backend AI image endpoint
+  async function analyzeImage() {
     if (!selectedImage) {
       Alert.alert(
         "No Image",
@@ -197,17 +231,68 @@ export default function CodingWorkspaceScreen() {
       return;
     }
 
-    Alert.alert(
-      "AI Image Analysis",
-      "Your image is ready. AI image analysis will work once the backend image endpoint is connected."
-    );
+    if (analysing) {
+      return;
+    }
+
+    try {
+      setAnalysing(true);
+      setOutput("Analysing your image with DevMate AI...");
+
+      const analysis = await analyseCodeImage(
+        selectedImage,
+        undefined,
+        selectedImageType
+      );
+
+      setOutput(analysis);
+    } catch (error: any) {
+      setOutput(
+        `Image analysis failed.\n${error?.message || "An unexpected error occurred."}`
+      );
+    } finally {
+      setAnalysing(false);
+    }
   }
 
-  // Code execution has not yet been connected
-  function runCode() {
-    setOutput(
-      "Code execution is not connected yet. Your code has been kept in the editor."
-    );
+  // Run the code in the remote sandbox and show the result in the output card
+  async function runCode() {
+    if (running) {
+      return;
+    }
+
+    if (code.trim() === "") {
+      setOutput("Write some code first, then press Run Code.");
+      return;
+    }
+
+    if (currentLanguage === "Not detected") {
+      setOutput(
+        "I couldn't tell which language this is. Choose one from the language menu above the editor, then run again."
+      );
+      return;
+    }
+
+    if (["HTML", "CSS", "JSON"].includes(currentLanguage)) {
+      setOutput(`${currentLanguage} is not directly executable in this code runner. Choose a supported runtime language.`);
+      return;
+    }
+
+    try {
+      setRunning(true);
+      setOutput(`Running your ${currentLanguage} code...`);
+
+      const result = await runCodeRemote(currentLanguage, code);
+      setOutput(formatRunResult(result));
+    } catch (error: any) {
+      // The code stays in the editor
+      setOutput(
+        `Could not run your code.\n${error?.message || "An unexpected error occurred."}\n\n` +
+          "Your code is still in the editor."
+      );
+    } finally {
+      setRunning(false);
+    }
   }
 
   // Submit the student's code to the existing Spring Boot API
@@ -314,13 +399,15 @@ export default function CodingWorkspaceScreen() {
         return "style.css";
       case "SQL":
         return "query.sql";
+      case "JSON":
+        return "data.json";
       default:
         return "untitled";
     }
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -332,22 +419,22 @@ export default function CodingWorkspaceScreen() {
           {/* HEADER */}
           <View style={styles.header}>
             <TouchableOpacity
-              style={styles.backButton}
+              style={[styles.backButton, themeStyles.surface]}
               onPress={() => router.back()}
             >
               <Ionicons
                 name="chevron-back"
                 size={26}
-                color="#FFFFFF"
+                color={colors.text}
               />
             </TouchableOpacity>
 
             <View style={styles.headerInfo}>
-              <Text style={styles.headerTitle}>
+              <Text style={[styles.headerTitle, themeStyles.text]}>
                 Coding Workspace
               </Text>
 
-              <Text style={styles.headerSubtitle}>
+              <Text style={[styles.headerSubtitle, themeStyles.secondary]}>
                 {validAssessmentId
                   ? `Assessment #${selectedAssessmentId}`
                   : "Student Coding Environment"}
@@ -356,39 +443,39 @@ export default function CodingWorkspaceScreen() {
           </View>
 
           {/* ASSESSMENT INFORMATION */}
-          <View style={styles.questionCard}>
+          <View style={[styles.questionCard, themeStyles.surface]}>
             <Text style={styles.sectionLabel}>
               ASSESSMENT
             </Text>
 
-            <Text style={styles.questionTitle}>
-              {validAssessmentId
+            <Text style={[styles.questionTitle, themeStyles.text]}>
+              {params.title || (validAssessmentId
                 ? `Assessment #${selectedAssessmentId}`
-                : "No Assessment Selected"}
+                : "No Assessment Selected")}
             </Text>
 
-            <Text style={styles.questionText}>
-              {validAssessmentId
+            <Text style={[styles.questionText, themeStyles.secondary]}>
+              {params.question || (validAssessmentId
                 ? "Write your solution in the code editor below. Review the assessment instructions before submitting."
-                : "Open this workspace from an assessment to submit your code."}
+                : "Open this workspace from an assessment to submit your code.")}
             </Text>
 
             <Text style={styles.questionNote}>
-              Your code will be submitted to the selected assessment.
+              {validAssessmentId ? "Your code will be submitted to the selected assessment." : "You can still write and run code without an assessment."}
             </Text>
           </View>
 
           {/* CODE EDITOR HEADER */}
           <View style={styles.editorHeader}>
-            <Text style={styles.sectionTitle}>
+            <Text style={[styles.sectionTitle, themeStyles.text]}>
               Code Editor
             </Text>
 
             <TouchableOpacity
-              style={styles.languageBadge}
+              style={[styles.languageBadge, themeStyles.accentSurface]}
               onPress={() => setShowLanguages(!showLanguages)}
             >
-              <Text style={styles.languageText}>
+              <Text style={[styles.languageText, themeStyles.accentText]}>
                 {currentLanguage} ▼
               </Text>
             </TouchableOpacity>
@@ -396,17 +483,17 @@ export default function CodingWorkspaceScreen() {
 
           {/* PROGRAMMING LANGUAGE SELECTION */}
           {showLanguages && (
-            <View style={styles.languageMenu}>
+            <View style={[styles.languageMenu, themeStyles.surface]}>
               {languages.map((language) => (
                 <TouchableOpacity
                   key={language}
-                  style={styles.languageOption}
+                  style={[styles.languageOption, { borderBottomColor: colors.border }]}
                   onPress={() => {
                     setSelectedLanguage(language);
                     setShowLanguages(false);
                   }}
                 >
-                  <Text style={styles.languageOptionText}>
+                  <Text style={[styles.languageOptionText, themeStyles.text]}>
                     {language}
                   </Text>
                 </TouchableOpacity>
@@ -415,20 +502,20 @@ export default function CodingWorkspaceScreen() {
           )}
 
           {/* CODE EDITOR */}
-          <View style={styles.editorContainer}>
-            <View style={styles.editorToolbar}>
-              <Text style={styles.fileName}>
+          <View style={[styles.editorContainer, themeStyles.editor]}>
+            <View style={[styles.editorToolbar, themeStyles.toolbar]}>
+              <Text style={[styles.fileName, themeStyles.text]}>
                 {getFileName()}
               </Text>
 
-              <Text style={styles.editorStatus}>
+              <Text style={[styles.editorStatus, themeStyles.secondary]}>
                 Editing
               </Text>
             </View>
 
             <View style={styles.codeArea}>
               {/* LINE NUMBERS */}
-              <View style={styles.lineNumbers}>
+              <View style={[styles.lineNumbers, { borderRightColor: colors.border }]}>
                 {Array.from(
                   {
                     length: Math.max(
@@ -439,7 +526,7 @@ export default function CodingWorkspaceScreen() {
                   (_, index) => (
                     <Text
                       key={index}
-                      style={styles.lineNumber}
+                      style={[styles.lineNumber, themeStyles.secondary]}
                     >
                       {index + 1}
                     </Text>
@@ -449,7 +536,7 @@ export default function CodingWorkspaceScreen() {
 
               {/* STUDENT CODE */}
               <TextInput
-                style={styles.codeInput}
+                style={[styles.codeInput, themeStyles.text]}
                 value={code}
                 onChangeText={setCode}
                 multiline
@@ -460,7 +547,7 @@ export default function CodingWorkspaceScreen() {
                 keyboardType="default"
                 scrollEnabled={false}
                 placeholder="Write your code here..."
-                placeholderTextColor="#666666"
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
           </View>
@@ -468,8 +555,9 @@ export default function CodingWorkspaceScreen() {
           {/* ACTION BUTTONS */}
           <View style={styles.actionRow}>
             <TouchableOpacity
-              style={styles.runButton}
+              style={[styles.runButton, running && styles.disabledButton]}
               onPress={runCode}
+              disabled={running}
             >
               <Ionicons
                 name="play"
@@ -477,12 +565,12 @@ export default function CodingWorkspaceScreen() {
                 color="#FFFFFF"
               />
               <Text style={styles.runButtonText}>
-                Run Code
+                {running ? "Running..." : "Run Code"}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.aiButton}
+              style={[styles.aiButton, themeStyles.surface]}
               onPress={openAIHelp}
             >
               <Ionicons
@@ -490,18 +578,18 @@ export default function CodingWorkspaceScreen() {
                 size={18}
                 color="#A78BFA"
               />
-              <Text style={styles.aiButtonText}>
+              <Text style={[styles.aiButtonText, themeStyles.accentText]}>
                 AI Help
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* CAMERA AND SCREENSHOT ASSISTANCE */}
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, themeStyles.text]}>
             Camera Code Assistant
           </Text>
 
-          <Text style={styles.cameraDescription}>
+          <Text style={[styles.cameraDescription, themeStyles.secondary]}>
             Take a photo of code or an error on your computer
             screen, or upload an existing screenshot.
           </Text>
@@ -522,7 +610,7 @@ export default function CodingWorkspaceScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.galleryButton}
+              style={[styles.galleryButton, themeStyles.surface]}
               onPress={uploadScreenshot}
             >
               <Ionicons
@@ -530,7 +618,7 @@ export default function CodingWorkspaceScreen() {
                 size={18}
                 color="#A78BFA"
               />
-              <Text style={styles.galleryButtonText}>
+              <Text style={[styles.galleryButtonText, themeStyles.accentText]}>
                 Upload Screenshot
               </Text>
             </TouchableOpacity>
@@ -538,14 +626,14 @@ export default function CodingWorkspaceScreen() {
 
           {/* IMAGE PREVIEW */}
           {selectedImage && (
-            <View style={styles.previewCard}>
-              <Text style={styles.previewTitle}>
+            <View style={[styles.previewCard, themeStyles.surface]}>
+              <Text style={[styles.previewTitle, themeStyles.text]}>
                 Selected Image
               </Text>
 
               <Image
                 source={{ uri: selectedImage }}
-                style={styles.imagePreview}
+                style={[styles.imagePreview, { backgroundColor: colors.background }]}
                 resizeMode="contain"
               />
 
@@ -564,10 +652,10 @@ export default function CodingWorkspaceScreen() {
           <TouchableOpacity
             style={[
               styles.analyzeButton,
-              !selectedImage && styles.disabledButton,
+              (!selectedImage || analysing) && styles.disabledButton,
             ]}
             onPress={analyzeImage}
-            disabled={!selectedImage}
+            disabled={!selectedImage || analysing}
           >
             <Ionicons
               name="sparkles-outline"
@@ -575,26 +663,26 @@ export default function CodingWorkspaceScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.analyzeButtonText}>
-              Analyze Image with AI
+              {analysing ? "Analysing..." : "Analyze Image with AI"}
             </Text>
           </TouchableOpacity>
 
-          <Text style={styles.cameraNote}>
-            Image capture is ready. AI image analysis
-            requires a backend connection.
+          <Text style={[styles.cameraNote, themeStyles.secondary]}>
+            Take a clear, well-lit photo of the code. The AI
+            explanation appears in the Output section below.
           </Text>
 
           {/* OUTPUT AREA */}
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, themeStyles.text]}>
             Output
           </Text>
 
-          <View style={styles.outputCard}>
-            <Text style={styles.outputLabel}>
+          <View style={[styles.outputCard, themeStyles.surface]}>
+            <Text style={[styles.outputLabel, themeStyles.secondary]}>
               CONSOLE
             </Text>
 
-            <Text style={styles.outputText}>
+            <Text style={[styles.outputText, themeStyles.text]}>
               {output}
             </Text>
           </View>
@@ -619,7 +707,7 @@ export default function CodingWorkspaceScreen() {
             </Text>
           </TouchableOpacity>
 
-          <Text style={styles.footerNote}>
+          <Text style={[styles.footerNote, themeStyles.secondary]}>
             Review your code carefully before submitting.
           </Text>
         </ScrollView>
