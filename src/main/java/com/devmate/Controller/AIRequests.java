@@ -1,6 +1,8 @@
 package com.devmate.Controller;
 
+
 public class AIRequests {
+
 
     private String prompt;
     private Integer assessmentId;

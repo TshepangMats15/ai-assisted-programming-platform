@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/ai")
+@RequestMapping({"/api/gemini", "/api/ai"})
 public class ImageController {
 
     private final GeminiImageServices imageServices;

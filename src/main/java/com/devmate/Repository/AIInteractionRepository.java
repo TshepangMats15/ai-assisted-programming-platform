@@ -3,11 +3,11 @@ package com.devmate.Repository;
 import com.devmate.Entities.AIInteraction;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-
 import java.time.LocalDateTime;
 import java.util.List;
 
 public interface AIInteractionRepository extends JpaRepository <AIInteraction,Integer> {
+
 
     List<AIInteraction> findByUserID(String userID);
 

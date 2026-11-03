@@ -48,54 +48,44 @@ public class AnalyticsServices {
 
         Map<String, Object> summary = new LinkedHashMap<>();
 
-        summary.put(
-                "totalAssessmentsCompleted",
+        summary.put( "totalAssessmentsCompleted",
                 results.size()
         );
 
         // Aliases for existing frontend reports
-        summary.put(
-                "totalAssessments",
+        summary.put( "totalAssessments",
                 results.size()
         );
 
-        summary.put(
-                "totalAIInteractions",
+        summary.put("totalAIInteractions",
                 interactions.size()
         );
 
-        summary.put(
-                "totalAiInteractions",
+        summary.put( "totalAiInteractions",
                 interactions.size()
         );
 
-        summary.put(
-                "averageScore",
+        summary.put("averageScore",
                 calculateAverageScore(results)
         );
 
-        summary.put(
-                "averageCompletionTimeSeconds",
+        summary.put( "averageCompletionTimeSeconds",
                 averageCompletionTime(results)
         );
 
-        summary.put(
-                "successfulAIInteractions",
+        summary.put( "successfulAIInteractions",
                 countByStatus(interactions, "SUCCESS")
         );
 
-        summary.put(
-                "failedAIInteractions",
+        summary.put("failedAIInteractions",
                 countByStatus(interactions, "FAILED")
         );
 
-        summary.put(
-                "averageAIProcessingTimeMs",
+        summary.put("averageAIProcessingTimeMs",
                 averageAIProcessingTime(interactions)
         );
 
-        summary.put(
-                "totalRecordedAIUsage",
+        summary.put("totalRecordedAIUsage",
                 results.stream()
                         .map(Result::getAiUsage)
                         .filter(Objects::nonNull)
@@ -110,59 +100,47 @@ public class AnalyticsServices {
     // 2. INDIVIDUAL USER ANALYTICS
     // ==========================================
 
-    public Map<String, Object> getUserAnalytics(
-            String userID) {
+    public Map<String, Object> getUserAnalytics(String userID) {
 
         validateUserId(userID);
 
-        List<Result> results =
-                resultRepository.findByUserId(userID);
+        List<Result> results = resultRepository.findByUserId(userID);
 
-        List<AIInteraction> interactions =
-                interactionRepository.findByUserID(userID);
+        List<AIInteraction> interactions = interactionRepository.findByUserID(userID);
 
-        Map<String, Object> analytics =
-                new LinkedHashMap<>();
+        Map<String, Object> analytics = new LinkedHashMap<>();
 
         analytics.put("userID", userID);
 
-        analytics.put(
-                "assessmentsCompleted",
+        analytics.put( "assessmentsCompleted",
                 results.size()
         );
 
-        analytics.put(
-                "averageScore",
+        analytics.put("averageScore",
                 calculateAverageScore(results)
         );
 
-        analytics.put(
-                "averageCompletionTimeSeconds",
+        analytics.put("averageCompletionTimeSeconds",
                 averageCompletionTime(results)
         );
 
-        analytics.put(
-                "totalAIInteractions",
+        analytics.put( "totalAIInteractions",
                 interactions.size()
         );
 
-        analytics.put(
-                "successfulAIInteractions",
+        analytics.put( "successfulAIInteractions",
                 countByStatus(interactions, "SUCCESS")
         );
 
-        analytics.put(
-                "failedAIInteractions",
+        analytics.put( "failedAIInteractions",
                 countByStatus(interactions, "FAILED")
         );
 
-        analytics.put(
-                "averageAIProcessingTimeMs",
+        analytics.put( "averageAIProcessingTimeMs",
                 averageAIProcessingTime(interactions)
         );
 
-        analytics.put(
-                "totalRecordedAIUsage",
+        analytics.put( "totalRecordedAIUsage",
                 results.stream()
                         .map(Result::getAiUsage)
                         .filter(Objects::nonNull)
@@ -170,13 +148,11 @@ public class AnalyticsServices {
                         .sum()
         );
 
-        analytics.put(
-                "totalAIUsageFrequency",
+        analytics.put("totalAIUsageFrequency",
                 getUserAIUsageFrequency(userID)
         );
 
-        analytics.put(
-                "dailyAIUsageFrequency",
+        analytics.put("dailyAIUsageFrequency",
                 getUserDailyAIUsageFrequency(userID)
         );
 
@@ -190,11 +166,9 @@ public class AnalyticsServices {
     public List<Map<String, Object>>
     getAssessmentAnalytics() {
 
-        List<Result> results =
-                resultRepository.findAll();
+        List<Result> results = resultRepository.findAll();
 
-        Map<Integer, List<Result>> groupedResults =
-                results.stream()
+        Map<Integer, List<Result>> groupedResults = results.stream()
                         .filter(result ->
                                 result.getAssessmentId() != null)
                         .collect(Collectors.groupingBy(
@@ -203,8 +177,7 @@ public class AnalyticsServices {
                                 Collectors.toList()
                         ));
 
-        List<Map<String, Object>> analytics =
-                new ArrayList<>();
+        List<Map<String, Object>> analytics = new ArrayList<>();
 
         for (Map.Entry<Integer, List<Result>> entry
                 : groupedResults.entrySet()) {
@@ -215,23 +188,19 @@ public class AnalyticsServices {
             Map<String, Object> item =
                     new LinkedHashMap<>();
 
-            item.put(
-                    "assessmentID",
+            item.put( "assessmentID",
                     entry.getKey()
             );
 
-            item.put(
-                    "totalSubmissions",
+            item.put("totalSubmissions",
                     assessmentResults.size()
             );
 
-            item.put(
-                    "averageScore",
+            item.put("averageScore",
                     calculateAverageScore(assessmentResults)
             );
 
-            item.put(
-                    "averageCompletionTimeSeconds",
+            item.put("averageCompletionTimeSeconds",
                     averageCompletionTime(assessmentResults)
             );
 
@@ -248,11 +217,9 @@ public class AnalyticsServices {
     public List<Map<String, Object>>
     getAIUsageAnalytics() {
 
-        List<AIInteraction> interactions =
-                interactionRepository.findAll();
+        List<AIInteraction> interactions = interactionRepository.findAll();
 
-        Map<String, List<AIInteraction>> grouped =
-                interactions.stream()
+        Map<String, List<AIInteraction>> grouped = interactions.stream()
                         .filter(interaction ->
                                 interaction.getUserID() != null)
                         .collect(Collectors.groupingBy(
@@ -269,44 +236,32 @@ public class AnalyticsServices {
 
             String userID = entry.getKey();
 
-            List<AIInteraction> userInteractions =
-                    entry.getValue();
+            List<AIInteraction> userInteractions = entry.getValue();
 
-            Map<String, Object> item =
-                    new LinkedHashMap<>();
+                    
+            Map<String, Object> item =new LinkedHashMap<>();
+                    
 
             item.put("userID", userID);
 
-            item.put(
-                    "totalInteractions",
+            item.put("totalInteractions",
                     userInteractions.size()
             );
 
-            item.put(
-                    "successfulInteractions",
-                    countByStatus(
-                            userInteractions,
-                            "SUCCESS"
-                    )
+            item.put("successfulInteractions",
+                    countByStatus(userInteractions, "SUCCESS")
             );
 
-            item.put(
-                    "failedInteractions",
-                    countByStatus(
-                            userInteractions,
-                            "FAILED"
-                    )
+            item.put( "failedInteractions",
+                    countByStatus( userInteractions, "FAILED")
             );
 
-            item.put(
-                    "averageProcessingTimeMs",
-                    averageAIProcessingTime(
-                            userInteractions
-                    )
+            item.put( "averageProcessingTimeMs",
+                    averageAIProcessingTime(userInteractions)
+                            
             );
 
-            item.put(
-                    "dailyInteractions",
+            item.put("dailyInteractions",
                     getUserDailyAIUsageFrequency(userID)
             );
 
@@ -398,42 +353,37 @@ public class AnalyticsServices {
 
         LocalDate today = LocalDate.now();
 
-        LocalDateTime startOfDay =
-                today.atStartOfDay();
+        LocalDateTime startOfDay = today.atStartOfDay();
+                
 
-        LocalDateTime startOfTomorrow =
-                today.plusDays(1).atStartOfDay();
+        LocalDateTime startOfTomorrow = today.plusDays(1).atStartOfDay();
 
-        return interactionRepository
-                .countByTimestampBetween(
+        return interactionRepository.countByTimestampBetween(
                         startOfDay,
-                        startOfTomorrow.minusNanos(1)
-                );
+                        startOfTomorrow.minusNanos(1));
     }
 
     // ==========================================
     // 11. USER DAILY AI USAGE
     // ==========================================
 
-    public long getUserDailyAIUsageFrequency(
-            String userID) {
+    public long getUserDailyAIUsageFrequency(String userID) {
 
         validateUserId(userID);
 
         LocalDate today = LocalDate.now();
 
-        LocalDateTime startOfDay =
-                today.atStartOfDay();
+        LocalDateTime startOfDay =  today.atStartOfDay();
+               
 
-        LocalDateTime startOfTomorrow =
-                today.plusDays(1).atStartOfDay();
+        LocalDateTime startOfTomorrow =today.plusDays(1).atStartOfDay();
+                
 
-        return interactionRepository
-                .countByUserIDAndTimestampBetween(
+        return interactionRepository.countByUserIDAndTimestampBetween(
                         userID,
                         startOfDay,
-                        startOfTomorrow.minusNanos(1)
-                );
+                        startOfTomorrow.minusNanos(1));
+              
     }
 
     // ==========================================
@@ -443,75 +393,58 @@ public class AnalyticsServices {
     public List<Map<String, Object>>
     getCompletionTimeMetrics() {
 
-        List<Result> results =
-                resultRepository.findAll();
+        List<Result> results = resultRepository.findAll();
+                
 
-        Map<Integer, List<Result>> groupedResults =
-                results.stream()
-                        .filter(result ->
-                                result.getAssessmentId() != null)
-                        .collect(Collectors.groupingBy(
+        Map<Integer, List<Result>> groupedResults = results.stream() .filter(result ->
+                        result.getAssessmentId() != null).collect(Collectors.groupingBy(
                                 Result::getAssessmentId,
                                 LinkedHashMap::new,
                                 Collectors.toList()
                         ));
 
-        List<Map<String, Object>> metrics =
-                new ArrayList<>();
-
+        List<Map<String, Object>> metrics = new ArrayList<>();
         for (Map.Entry<Integer, List<Result>> entry
                 : groupedResults.entrySet()) {
 
-            List<Result> assessmentResults =
-                    entry.getValue();
+            List<Result> assessmentResults = entry.getValue();
+                    
 
-            List<Integer> times =
-                    assessmentResults.stream()
+            List<Integer> times = assessmentResults.stream()
                             .map(Result::getCompletionTime)
                             .filter(Objects::nonNull)
                             .collect(Collectors.toList());
 
-            Map<String, Object> item =
-                    new LinkedHashMap<>();
+            Map<String, Object> item = new LinkedHashMap<>();
+                    
 
-            item.put(
-                    "assessmentID",
-                    entry.getKey()
-            );
+            item.put("assessmentID", entry.getKey());
+                    
+                    
+            item.put( "totalSubmissions", assessmentResults.size());
+                   
+            item.put( "recordedCompletionTimes", times.size());
+                    
+                    
+           
 
-            item.put(
-                    "totalSubmissions",
-                    assessmentResults.size()
-            );
-
-            item.put(
-                    "recordedCompletionTimes",
-                    times.size()
-            );
-
-            item.put(
-                    "averageCompletionTimeSeconds",
-                    times.stream()
+            item.put("averageCompletionTimeSeconds", times.stream()
                             .mapToInt(Integer::intValue)
                             .average()
-                            .orElse(0.0)
-            );
+                            .orElse(0.0));
+            
 
-            item.put(
-                    "fastestCompletionTimeSeconds",
-                    times.stream()
-                            .mapToInt(Integer::intValue)
-                            .min()
-                            .orElse(0)
-            );
+            item.put( "fastestCompletionTimeSeconds", times.stream()
+                        .mapToInt(Integer::intValue)
+                        .min()
+                        .orElse(0));
+            
 
-            item.put(
-                    "longestCompletionTimeSeconds",
-                    times.stream()
+            item.put( "longestCompletionTimeSeconds", times.stream()
                             .mapToInt(Integer::intValue)
                             .max()
-                            .orElse(0)
-            );
+                            .orElse(0));
+            
 
             metrics.add(item);
         }
