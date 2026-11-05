@@ -1,37 +1,61 @@
+
 package AI.Productivity.Platform.config;
 
-import com.google.auth.oauth2 .GoogleCredentials;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import jakarta.annotation.PostConstruct;
 import org.springframework.context.annotation.Configuration;
 
-import jakarta.annotation.PostConstruct;
-import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 
 @Configuration
 public class FirebaseConfig {
 
     @PostConstruct
     public void initializeFirebase() {
+        if (!FirebaseApp.getApps().isEmpty()) {
+            return;
+        }
+
+        String serviceAccountJson =
+                System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
+
+        if (serviceAccountJson == null ||
+                serviceAccountJson.isBlank()) {
+            throw new IllegalStateException(
+                    "Missing FIREBASE_SERVICE_ACCOUNT_JSON environment variable."
+            );
+        }
+
         try {
-            if (FirebaseApp.getApps().isEmpty()) {
-                InputStream serviceAccount = getClass().getClassLoader()
-                        .getResourceAsStream("firebase-service-account.json");
+            GoogleCredentials credentials =
+                    GoogleCredentials.fromStream(
+                            new ByteArrayInputStream(
+                                    serviceAccountJson.getBytes(
+                                            StandardCharsets.UTF_8
+                                    )
+                            )
+                    );
 
-                if (serviceAccount == null) {
-                    System.err.println("Firebase service account file not found!");
-                    return;
-                }
+            FirebaseOptions options =
+                    FirebaseOptions.builder()
+                            .setCredentials(credentials)
+                            .build();
 
-                FirebaseOptions options = FirebaseOptions.builder()
-                        .setCredentials(GoogleCredentials.fromStream(serviceAccount))
-                        .build();
+            FirebaseApp.initializeApp(options);
 
-                FirebaseApp.initializeApp(options);
-                System.out.println("Firebase successfully initialized in Spring Boot.");
-            }
+            System.out.println(
+                    "Firebase Admin SDK initialized successfully."
+            );
+
         } catch (Exception e) {
-            System.err.println("Error initializing Firebase: " + e.getMessage());
+            throw new IllegalStateException(
+                    "Firebase Admin SDK initialization failed.",
+                    e
+            );
         }
     }
 }
+

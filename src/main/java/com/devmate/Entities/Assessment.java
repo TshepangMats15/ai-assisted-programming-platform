@@ -1,6 +1,9 @@
+
 package com.devmate.Entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+
 import java.util.List;
 
 @Entity
@@ -28,20 +31,31 @@ public class Assessment {
     private Integer timeLimit;
 
     @Column(name = "assessment_type", nullable = false)
-    private String assessmentType; // PRE_TEST or POST_TEST
+    private String assessmentType;
 
     @Column(name = "ai_allowed", nullable = false)
-    private Boolean aiAllowed = false; // Controls AI gating
+    private Boolean aiAllowed = false;
 
-    @OneToMany(mappedBy = "assessment", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonIgnore
+    @OneToMany(
+            mappedBy = "assessment",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY
+    )
     private List<Question> questions;
 
     public Assessment() {
     }
 
-    public Assessment(String title, String description, String difficulty, 
-                      String programLang, Integer timeLimit, 
-                      String assessmentType, Boolean aiAllowed) {
+    public Assessment(
+            String title,
+            String description,
+            String difficulty,
+            String programLang,
+            Integer timeLimit,
+            String assessmentType,
+            Boolean aiAllowed
+    ) {
         this.title = title;
         this.description = description;
         this.difficulty = difficulty;
@@ -51,7 +65,6 @@ public class Assessment {
         this.aiAllowed = aiAllowed;
     }
 
-    // Getters and Setters
     public Integer getAssessmentID() {
         return assessmentID;
     }
