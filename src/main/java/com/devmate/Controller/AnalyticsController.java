@@ -28,7 +28,7 @@ public class AnalyticsController {
     }
 
     // GET /api/analytics/summary AND /api/analytics/reports
-    @GetMapping("/ai-usage")
+   @GetMapping({"/summary", "/reports"})
     public ResponseEntity<Map<String, Object>> getSummary() {
         return ResponseEntity.ok(analyticsService.getSummary());
     }

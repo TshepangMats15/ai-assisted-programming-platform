@@ -2,7 +2,7 @@ package com.devmate.Entities;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.Audited;
-
+import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -24,6 +24,7 @@ public class Coursework {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    @JsonFormat(pattern = "[yyyy-MM-dd HH:mm:ss][yyyy-MM-dd'T'HH:mm:ss][yyyy-MM-dd]")
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 
@@ -44,8 +45,7 @@ public class Coursework {
     @OneToMany(mappedBy = "coursework", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Lesson> lessons;
 
-    public Coursework() {
-    }
+    public Coursework() {}
 
     public Coursework(String courseID, String title, String module,
                       String description, LocalDateTime dueDate,
