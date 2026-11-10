@@ -1,4 +1,4 @@
-// Import React and React Native components
+
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -8,9 +8,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
 } from "react-native";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
 import { auth } from "../services/firebase";
 import { router } from "expo-router";
 
@@ -20,11 +22,16 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!firstName.trim() || !surname.trim() || !email || !password || !confirmPassword) {
+    if (
+      !firstName.trim() ||
+      !surname.trim() ||
+      !email.trim() ||
+      !password ||
+      !confirmPassword
+    ) {
       Alert.alert("Error", "Please complete all fields.");
       return;
     }
@@ -42,9 +49,12 @@ export default function RegisterScreen() {
     try {
       setLoading(true);
 
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
 
-      // Save student's full name to Firebase auth profile
       await updateProfile(userCredential.user, {
         displayName: `${firstName.trim()} ${surname.trim()}`,
       });
@@ -59,11 +69,15 @@ export default function RegisterScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.title}>Create Account</Text>
-      <Text style={styles.subtitle}>Register as a student to continue</Text>
+      <Text style={styles.subtitle}>
+        Register as a student to continue
+      </Text>
 
-      {/* Name Input */}
       <TextInput
         style={styles.input}
         placeholder="First Name"
@@ -72,7 +86,6 @@ export default function RegisterScreen() {
         autoCapitalize="words"
       />
 
-      {/* Surname Input */}
       <TextInput
         style={styles.input}
         placeholder="Surname"
@@ -81,7 +94,6 @@ export default function RegisterScreen() {
         autoCapitalize="words"
       />
 
-      {/* Email Input */}
       <TextInput
         style={styles.input}
         placeholder="Email Address"
@@ -91,7 +103,6 @@ export default function RegisterScreen() {
         autoCapitalize="none"
       />
 
-      {/* Password Input */}
       <TextInput
         style={styles.input}
         placeholder="Password"
@@ -104,7 +115,6 @@ export default function RegisterScreen() {
         Password must have 8+ characters, uppercase, lowercase, number and special character.
       </Text>
 
-      {/* Confirm Password Input */}
       <TextInput
         style={styles.input}
         placeholder="Confirm Password"
@@ -113,13 +123,30 @@ export default function RegisterScreen() {
         secureTextEntry
       />
 
-      {/* Register Button */}
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-        {loading ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Register as Student</Text>}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={handleRegister}
+        disabled={loading}
+      >
+        {loading ? (
+          <ActivityIndicator color="white" />
+        ) : (
+          <Text style={styles.buttonText}>Register as Student</Text>
+        )}
+      </TouchableOpacity>
+
+      {/* Temporary Admin Login Button */}
+      <TouchableOpacity
+        style={styles.adminButton}
+        onPress={() => router.push("../admin/adminindex" as any)}
+    >
+        <Text style={styles.adminButtonText}>Admin Login</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/")}>
-        <Text style={styles.loginText}>Already have an account? Login</Text>
+        <Text style={styles.loginText}>
+          Already have an account? Login
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -130,13 +157,23 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 25,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
   },
-  title: { fontSize: 28, fontWeight: "bold", textAlign: "center", marginBottom: 8 },
-  subtitle: { fontSize: 15, textAlign: "center", marginBottom: 25, color: "#666" },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 15,
+    textAlign: "center",
+    marginBottom: 25,
+    color: "#666666",
+  },
   input: {
     borderWidth: 1,
-    borderColor: "#cccccc",
+    borderColor: "#CCCCCC",
     borderRadius: 8,
     padding: 14,
     marginBottom: 12,
@@ -149,7 +186,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
-  buttonText: { color: "#ffffff", fontSize: 16, fontWeight: "bold" },
-  loginText: { textAlign: "center", marginTop: 20, fontSize: 15, color: "#8B5CF6" },
-  passwordInfo: { fontSize: 12, color: "#666666", marginBottom: 12, marginTop: -4 },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  adminButton: {
+    backgroundColor: "#1A1A1A",
+    borderWidth: 1,
+    borderColor: "#8B5CF6",
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 15,
+  },
+  adminButtonText: {
+    color: "#A78BFA",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  loginText: {
+    textAlign: "center",
+    marginTop: 20,
+    fontSize: 15,
+    color: "#8B5CF6",
+  },
+  passwordInfo: {
+    fontSize: 12,
+    color: "#666666",
+    marginBottom: 12,
+    marginTop: -4,
+  },
 });

@@ -31,6 +31,7 @@ type AdminRoute =
   | "/admin/students"
   | "/admin/ai-usage"
   | "/admin/announcements"
+  | "/admin/settings"
   | "/admin/results"
   | "/admin/reports";
 
@@ -83,13 +84,6 @@ const managementItems: AdminMenuItem[] = [
 export default function AdminDashboard() {
   function openScreen(route: AdminRoute) {
     router.push(route);
-  }
-
-  function openSettings() {
-    Alert.alert(
-      "Admin Settings",
-      "The Admin Settings screen has not been connected yet."
-    );
   }
 
   return (
@@ -298,7 +292,7 @@ export default function AdminDashboard() {
 
         <TouchableOpacity
           style={styles.settingsCard}
-          onPress={openSettings}
+          onPress={() => openScreen("/admin/settings")}
         >
           <View style={styles.menuIconBox}>
             <Ionicons

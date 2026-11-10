@@ -1,26 +1,31 @@
-
 /**
  * DevMate Frontend API Service
  *
- * Temporary local coursework mode:
- * - Course Management works without Spring Boot
- * - Courses are saved on the device
- * - Other API services still use Spring Boot
- *
- * Set USE_LOCAL_COURSEWORK to false when the
- * backend is ready.
+ * - All services talk to the Spring Boot backend.
+ * - Course Management can still run locally (no backend) by setting
+ *   EXPO_PUBLIC_USE_LOCAL_COURSEWORK=true in your .env file.
+ *   By default it now uses the backend.
+ * - Requests time out after 60 seconds (Render free instances can take
+ *   30-60 seconds to wake up) and show readable error messages.
+ * - The auth token is saved on the device so it survives app reloads.
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://devmate-backend-lsxo.onrender.com";
+  "https://devmate-backend-lsxo.onrender.com/api";
 
-// Temporary mode for Admin Course Management
-const USE_LOCAL_COURSEWORK = true;
+// Temporary offline mode for Admin Course Management.
+// Default is false so Course Management uses the backend.
+const USE_LOCAL_COURSEWORK =
+  process.env.EXPO_PUBLIC_USE_LOCAL_COURSEWORK === "true";
 
 const COURSEWORK_STORAGE_KEY = "devmate_admin_coursework";
+const AUTH_TOKEN_STORAGE_KEY = "devmate_auth_token";
+
+// Render free instances can take a long time to wake up
+const REQUEST_TIMEOUT_MS = 60000;
 
 // ================= DTO TYPES =================
 
@@ -75,6 +80,11 @@ export interface ResultRecord {
   completionTime: number;
   aiUsage: number;
   submittedAt: string;
+  // Optional fields the Results screen can display when the backend sends them
+  studentName?: string;
+  course?: string;
+  assessmentTitle?: string;
+  grade?: string;
 }
 
 export interface AssessmentDTO {
@@ -110,19 +120,71 @@ export interface AnalyticsSummary {
   totalSubmissions?: number;
   averageScore?: number;
   totalAiInteractions?: number;
+  avgSimilarityScore?: number;
+  [key: string]: any;
+}
+
+export interface AnnouncementDTO {
+  id?: string | number;
+  title: string;
+  message: string;
+  audience: string;
+  createdAt?: string;
+}
+
+export interface UserDTO {
+  id?: string | number;
+  fullName?: string;
+  email?: string;
+  course?: string;
+  status?: string;
+  role?: string;
   [key: string]: any;
 }
 
 // ================= AUTH TOKEN =================
 
 let authToken: string | null = null;
+let tokenLoaded = false;
 
+// Call this after login (and again whenever the token refreshes).
+// Pass null on logout.
 export function setAuthToken(token: string | null) {
   authToken = token;
+  tokenLoaded = true;
+
+  if (token) {
+    AsyncStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token).catch(
+      () => {}
+    );
+  } else {
+    AsyncStorage.removeItem(AUTH_TOKEN_STORAGE_KEY).catch(
+      () => {}
+    );
+  }
 }
 
 export function getAuthToken(): string | null {
   return authToken;
+}
+
+// Restore a saved token the first time a request is made
+async function ensureTokenLoaded(): Promise<void> {
+  if (tokenLoaded) {
+    return;
+  }
+
+  tokenLoaded = true;
+
+  try {
+    const stored = await AsyncStorage.getItem(
+      AUTH_TOKEN_STORAGE_KEY
+    );
+
+    if (stored && !authToken) {
+      authToken = stored;
+    }
+  } catch {}
 }
 
 // ================= HTTP CLIENT =================
@@ -131,6 +193,8 @@ export async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
+  await ensureTokenLoaded();
+
   const url = `${API_BASE_URL}${
     endpoint.startsWith("/") ? endpoint : `/${endpoint}`
   }`;
@@ -145,13 +209,55 @@ export async function request<T>(
     headers["Authorization"] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+
+  const timer = setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS
+  );
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (error: any) {
+    if (__DEV__) {
+      console.warn(
+        `[api] ${options.method ?? "GET"} ${url} failed:`,
+        error
+      );
+    }
+
+    if (error?.name === "AbortError") {
+      throw new Error(
+        "The server took too long to respond. It may be starting up, so please try again in a moment."
+      );
+    }
+
+    throw new Error(
+      "Could not reach the server. Check your internet connection and the API URL."
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     let errorMessage = `HTTP Error ${response.status}`;
+
+    if (response.status === 401) {
+      errorMessage =
+        "You are not signed in, or your session has expired.";
+    } else if (response.status === 403) {
+      errorMessage =
+        "You do not have permission to access this resource.";
+    } else if (response.status === 404) {
+      errorMessage =
+        "This feature is not available on the server yet (404).";
+    }
 
     try {
       const errorBody = await response.json();
@@ -168,6 +274,12 @@ export async function request<T>(
           errorMessage = textBody;
         }
       } catch {}
+    }
+
+    if (__DEV__) {
+      console.warn(
+        `[api] ${options.method ?? "GET"} ${url} -> ${response.status}: ${errorMessage}`
+      );
     }
 
     throw new Error(errorMessage);
@@ -251,7 +363,7 @@ export const api = {
       userId: string
     ): Promise<SubmissionRecord[]> =>
       request<SubmissionRecord[]>(
-        `/submissions/user/${userId}`,
+        `/submissions/user/${encodeURIComponent(userId)}`,
         { method: "GET" }
       ),
   },
@@ -274,7 +386,7 @@ export const api = {
       userId: string
     ): Promise<ResultRecord[]> =>
       request<ResultRecord[]>(
-        `/results/user/${userId}`,
+        `/results/user/${encodeURIComponent(userId)}`,
         { method: "GET" }
       ),
   },
@@ -452,6 +564,41 @@ export const api = {
     },
   },
 
+  // ================= ANNOUNCEMENTS =================
+
+  announcements: {
+    getAll: (): Promise<AnnouncementDTO[]> =>
+      request<AnnouncementDTO[]>("/announcements", {
+        method: "GET",
+      }),
+
+    create: (
+      data: AnnouncementDTO
+    ): Promise<AnnouncementDTO> =>
+      request<AnnouncementDTO>("/announcements", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+
+    update: (
+      id: string | number,
+      data: Partial<AnnouncementDTO>
+    ): Promise<AnnouncementDTO> =>
+      request<AnnouncementDTO>(
+        `/announcements/${encodeURIComponent(String(id))}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(data),
+        }
+      ),
+
+    delete: (id: string | number): Promise<void> =>
+      request<void>(
+        `/announcements/${encodeURIComponent(String(id))}`,
+        { method: "DELETE" }
+      ),
+  },
+
   // ================= AI =================
 
   ai: {
@@ -483,7 +630,7 @@ export const api = {
       userId: string
     ): Promise<AIInteractionDTO[]> =>
       request<AIInteractionDTO[]>(
-        `/ai/interactions/user/${userId}`,
+        `/ai/interactions/user/${encodeURIComponent(userId)}`,
         { method: "GET" }
       ),
   },
@@ -506,31 +653,54 @@ export const api = {
         method: "GET",
       }),
 
-    getUserAnalytics: (
-      userId: string
-    ): Promise<any> =>
-      request<any>(`/analytics/user/${userId}`, {
-        method: "GET",
-      }),
+    getUserAnalytics: (userId: string): Promise<any> =>
+      request<any>(
+        `/analytics/user/${encodeURIComponent(userId)}`,
+        { method: "GET" }
+      ),
+
+    getStudentAnalytics: (userId: string): Promise<any> =>
+      request<any>(
+        `/analytics/student/${encodeURIComponent(userId)}`,
+        { method: "GET" }
+      ),
   },
 
   // ================= USERS =================
 
   users: {
-    getAll: (): Promise<any[]> =>
-      request<any[]>("/users", {
+    getAll: (): Promise<UserDTO[]> =>
+      request<UserDTO[]>("/users", {
         method: "GET",
       }),
 
-    getById: (id: string): Promise<any> =>
-      request<any>(`/users/${id}`, {
-        method: "GET",
-      }),
+    getById: (id: string): Promise<UserDTO> =>
+      request<UserDTO>(
+        `/users/${encodeURIComponent(id)}`,
+        { method: "GET" }
+      ),
 
-    create: (data: any): Promise<any> =>
-      request<any>("/users", {
+    create: (data: UserDTO): Promise<UserDTO> =>
+      request<UserDTO>("/users", {
         method: "POST",
         body: JSON.stringify(data),
+      }),
+
+    update: (
+      id: string,
+      data: Partial<UserDTO>
+    ): Promise<UserDTO> =>
+      request<UserDTO>(
+        `/users/${encodeURIComponent(id)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(data),
+        }
+      ),
+
+    delete: (id: string): Promise<void> =>
+      request<void>(`/users/${encodeURIComponent(id)}`, {
+        method: "DELETE",
       }),
   },
 

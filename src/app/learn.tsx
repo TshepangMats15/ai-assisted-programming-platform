@@ -1,7 +1,12 @@
 // DevMate Student Learn Screen
 
+import React, { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,172 +15,571 @@ import {
   View,
 } from "react-native";
 
+import { useAppTheme } from "../context/ThemeContext";
+import api, { CourseworkDTO } from "../constants/api";
+
 export default function LearnScreen() {
+  const { colors, isDark } = useAppTheme();
+
+  const purple = "#8B5CF6";
+  const purpleText = isDark ? "#A78BFA" : "#6D28D9";
+
+  const [courses, setCourses] = useState<CourseworkDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // =======================================================
+  // LOAD COURSES
+  // =======================================================
+
+  const loadCourses = useCallback(async () => {
+    try {
+      setError(null);
+
+      const data = await api.coursework.getAll();
+
+      setCourses(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error("[Learn] Failed to load coursework:", err);
+
+      setError(
+        err?.message ||
+          "Unable to load courses. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
+
+  // =======================================================
+  // REFRESH
+  // =======================================================
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      await loadCourses();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCourses]);
+
+  // =======================================================
+  // RETRY
+  // =======================================================
+
+  const handleRetry = async () => {
+    setLoading(true);
+    await loadCourses();
+  };
+
+  // =======================================================
+  // COURSE ICON
+  // =======================================================
+
+  const getCourseIconText = (course: CourseworkDTO) => {
+    const source = course.module || course.title;
+
+    const words = source
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+    if (words.length === 0) {
+      return "C";
+    }
+
+    if (words.length === 1) {
+      return words[0].substring(0, 2).toUpperCase();
+    }
+
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  };
+
+  // =======================================================
+  // OPEN COURSE
+  // =======================================================
+
+  const openCourse = (course: CourseworkDTO) => {
+    router.push({
+      pathname: "/assessments",
+      params: {
+        courseID: course.courseID,
+      },
+    });
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={purple}
+            colors={[purple]}
+          />
+        }
       >
         {/* ================= HEADER ================= */}
 
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Learn</Text>
-            <Text style={styles.subtitle}>
-              Continue building your programming skills.
-            </Text>
-          </View>
+          <Text
+            style={[
+              styles.title,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Learn
+          </Text>
+
+          <Text
+            style={[
+              styles.subtitle,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Continue building your programming skills.
+          </Text>
         </View>
-
-        {/* ================= CONTINUE LEARNING ================= */}
-
-        <Text style={styles.sectionTitle}>Continue Learning</Text>
-
-        <TouchableOpacity style={styles.featuredCourse}>
-          <View style={styles.courseHeader}>
-            <View style={styles.courseLevel}>
-              <Text style={styles.levelText}>IN PROGRESS</Text>
-            </View>
-
-            <Text style={styles.percentage}>70%</Text>
-          </View>
-
-          <Text style={styles.courseTitle}>
-            Basics of Python Programming
-          </Text>
-
-          <Text style={styles.courseDescription}>
-            Learn the fundamentals of Python and build your programming
-            foundation.
-          </Text>
-
-          <View style={styles.progressBackground}>
-            <View style={[styles.progressBar, { width: "70%" }]} />
-          </View>
-
-          <Text style={styles.progressText}>70% completed</Text>
-        </TouchableOpacity>
 
         {/* ================= YOUR COURSES ================= */}
 
-        <Text style={styles.sectionTitle}>Your Courses</Text>
-
-        {/* Python Course */}
-
-        <TouchableOpacity 
-          style={styles.courseCard}
-          onPress={() => router.push("/coursework")}
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: colors.text,
+            },
+          ]}
         >
-          <View style={styles.courseInfo}>
-            <View style={styles.courseIcon}>
-              <Text style={styles.courseIconText}>Py</Text>
-            </View>
+          Your Courses
+        </Text>
 
-            <View style={styles.courseDetails}>
-              <Text style={styles.cardTitle}>
-                Python Programming
-              </Text>
+        {/* ================= LOADING ================= */}
 
-              <Text style={styles.cardSubtitle}>
-                Programming Fundamentals
-              </Text>
+        {loading && !refreshing ? (
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <ActivityIndicator
+              size="large"
+              color={purple}
+            />
 
-              <View style={styles.smallProgressBackground}>
-                <View
-                  style={[
-                    styles.smallProgressBar,
-                    { width: "70%" },
-                  ]}
-                />
-              </View>
-
-              <Text style={styles.smallProgressText}>
-                70% complete
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* Web Development Course */}
-
-        <TouchableOpacity style={styles.courseCard}>
-          <View style={styles.courseInfo}>
-            <View style={styles.courseIcon}>
-              <Text style={styles.courseIconText}>{"</>"}</Text>
-            </View>
-
-            <View style={styles.courseDetails}>
-              <Text style={styles.cardTitle}>
-                Introduction to Web Design
-              </Text>
-
-              <Text style={styles.cardSubtitle}>
-                Web Development
-              </Text>
-
-              <View style={styles.smallProgressBackground}>
-                <View
-                  style={[
-                    styles.smallProgressBar,
-                    { width: "45%" },
-                  ]}
-                />
-              </View>
-
-              <Text style={styles.smallProgressText}>
-                45% complete
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-
-        {/* ================= EXPLORE ================= */}
-
-        <Text style={styles.sectionTitle}>Explore</Text>
-
-        <TouchableOpacity style={styles.exploreCard}>
-          <View>
-            <Text style={styles.exploreLevel}>NEXT STEP</Text>
-
-            <Text style={styles.exploreTitle}>
-              Intermediate Programming
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Loading courses
             </Text>
 
-            <Text style={styles.exploreDescription}>
-              Continue your learning journey with more advanced programming
-              concepts.
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Retrieving available coursework from DevMate.
             </Text>
           </View>
+        ) : error ? (
+          /* ================= ERROR ================= */
 
-          <Text style={styles.arrow}>›</Text>
-        </TouchableOpacity>
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={42}
+              color={purple}
+            />
+
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Unable to load courses
+            </Text>
+
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              {error}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRetry}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.retryButtonText}>
+                Try Again
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : courses.length === 0 ? (
+          /* ================= EMPTY ================= */
+
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="book-outline"
+              size={42}
+              color={purple}
+            />
+
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              No courses available
+            </Text>
+
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Courses created by your administrator will appear
+              here.
+            </Text>
+          </View>
+        ) : (
+          /* ================= REAL COURSES ================= */
+
+          courses.map((course) => (
+            <TouchableOpacity
+              key={course.courseID}
+              style={[
+                styles.courseCard,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
+              activeOpacity={0.8}
+              onPress={() => openCourse(course)}
+            >
+              <View style={styles.courseInfo}>
+                <View
+                  style={[
+                    styles.courseIcon,
+                    {
+                      backgroundColor: isDark
+                        ? "#2D2140"
+                        : "#EDE9FE",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.courseIconText,
+                      {
+                        color: purpleText,
+                      },
+                    ]}
+                  >
+                    {getCourseIconText(course)}
+                  </Text>
+                </View>
+
+                <View style={styles.courseDetails}>
+                  <Text
+                    style={[
+                      styles.cardTitle,
+                      {
+                        color: colors.text,
+                      },
+                    ]}
+                  >
+                    {course.title}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.cardSubtitle,
+                      {
+                        color: colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {course.module || "Coursework"}
+                  </Text>
+
+                  {course.description ? (
+                    <Text
+                      numberOfLines={2}
+                      style={[
+                        styles.cardDescription,
+                        {
+                          color: colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {course.description}
+                    </Text>
+                  ) : null}
+
+                  <View style={styles.courseMeta}>
+                    <View
+                      style={[
+                        styles.availableBadge,
+                        {
+                          backgroundColor: isDark
+                            ? "#2D2140"
+                            : "#EDE9FE",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.availableText,
+                          {
+                            color: purpleText,
+                          },
+                        ]}
+                      >
+                        AVAILABLE
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name="chevron-forward"
+                      size={19}
+                      color={purple}
+                    />
+                  </View>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
+
+        {/* ================= COURSEWORK SHORTCUT ================= */}
+
+        {!loading && !error && courses.length > 0 ? (
+          <>
+            <Text
+              style={[
+                styles.sectionTitle,
+                styles.courseworkSectionTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Coursework
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.exploreCard,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => router.push("/coursework")}
+            >
+              <View style={styles.exploreContent}>
+                <Text
+                  style={[
+                    styles.exploreLevel,
+                    {
+                      color: purpleText,
+                    },
+                  ]}
+                >
+                  VIEW ALL
+                </Text>
+
+                <Text
+                  style={[
+                    styles.exploreTitle,
+                    {
+                      color: colors.text,
+                    },
+                  ]}
+                >
+                  My Coursework
+                </Text>
+
+                <Text
+                  style={[
+                    styles.exploreDescription,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  View all available coursework, assessments,
+                  and learning activities.
+                </Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={24}
+                color={purple}
+              />
+            </TouchableOpacity>
+          </>
+        ) : null}
       </ScrollView>
 
       {/* ================= BOTTOM NAVIGATION ================= */}
 
-      <View style={styles.bottomNavigation}>
+      <View
+        style={[
+          styles.bottomNavigation,
+          {
+            backgroundColor: colors.backgroundElement,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.replace("/dashboard")}
         >
-          <Text style={styles.navIcon}>⌂</Text>
-          <Text style={styles.navText}>Home</Text>
+          <Ionicons
+            name="home-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Home
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.activeNavIcon}>▤</Text>
-          <Text style={styles.activeNavText}>Learn</Text>
+          <Ionicons
+            name="book"
+            size={22}
+            color={purple}
+          />
+
+          <Text style={styles.activeNavText}>
+            Learn
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>⚙</Text>
-          <Text style={styles.navText}>Settings</Text>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("/settings")}
+        >
+          <Ionicons
+            name="settings-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Settings
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>○</Text>
-          <Text style={styles.navText}>Account</Text>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => router.push("/profile")}
+        >
+          <Ionicons
+            name="person-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Account
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -187,7 +591,6 @@ export default function LearnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D0D0D",
   },
 
   scrollContent: {
@@ -203,13 +606,11 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#FFFFFF",
     fontSize: 28,
     fontWeight: "bold",
   },
 
   subtitle: {
-    color: "#A3A3A3",
     fontSize: 14,
     marginTop: 5,
   },
@@ -217,108 +618,41 @@ const styles = StyleSheet.create({
   // SECTION TITLE
 
   sectionTitle: {
-    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
     marginTop: 10,
   },
 
-  // FEATURED COURSE
-
-  featuredCourse: {
-    backgroundColor: "#1A1A1A",
-    borderRadius: 12,
-    padding: 18,
-    marginBottom: 25,
-  },
-
-  courseHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
-  courseLevel: {
-    backgroundColor: "#2D2140",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-
-  levelText: {
-    color: "#A78BFA",
-    fontSize: 10,
-    fontWeight: "bold",
-  },
-
-  percentage: {
-    color: "#8B5CF6",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-
-  courseTitle: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-
-  courseDescription: {
-    color: "#A3A3A3",
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 7,
-    marginBottom: 15,
-  },
-
-  progressBackground: {
-    height: 7,
-    backgroundColor: "#333333",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-
-  progressBar: {
-    height: 7,
-    backgroundColor: "#8B5CF6",
-    borderRadius: 4,
-  },
-
-  progressText: {
-    color: "#888888",
-    fontSize: 11,
-    marginTop: 7,
+  courseworkSectionTitle: {
+    marginTop: 28,
   },
 
   // COURSE CARDS
 
   courseCard: {
-    backgroundColor: "#1A1A1A",
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
   },
 
   courseInfo: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
 
   courseIcon: {
     width: 48,
     height: 48,
     borderRadius: 10,
-    backgroundColor: "#2D2140",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
   },
 
   courseIconText: {
-    color: "#A78BFA",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
   },
 
@@ -327,73 +661,111 @@ const styles = StyleSheet.create({
   },
 
   cardTitle: {
-    color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "bold",
   },
 
   cardSubtitle: {
-    color: "#888888",
     fontSize: 12,
     marginTop: 4,
-    marginBottom: 10,
   },
 
-  smallProgressBackground: {
-    height: 5,
-    backgroundColor: "#333333",
-    borderRadius: 3,
-    overflow: "hidden",
+  cardDescription: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 8,
   },
 
-  smallProgressBar: {
-    height: 5,
-    backgroundColor: "#8B5CF6",
-    borderRadius: 3,
+  courseMeta: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 12,
   },
 
-  smallProgressText: {
-    color: "#777777",
-    fontSize: 10,
+  availableBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+
+  availableText: {
+    fontSize: 9,
+    fontWeight: "bold",
+  },
+
+  // STATES
+
+  stateCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 28,
+    alignItems: "center",
     marginTop: 5,
   },
 
-  // EXPLORE
+  stateTitle: {
+    fontSize: 17,
+    fontWeight: "bold",
+    marginTop: 14,
+    textAlign: "center",
+  },
+
+  stateDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  retryButton: {
+    backgroundColor: "#8B5CF6",
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+
+  // COURSEWORK SHORTCUT
 
   exploreCard: {
-    backgroundColor: "#1A1A1A",
     borderRadius: 12,
     padding: 18,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    borderWidth: 1,
+  },
+
+  exploreContent: {
+    flex: 1,
+    paddingRight: 12,
   },
 
   exploreLevel: {
-    color: "#8B5CF6",
     fontSize: 10,
     fontWeight: "bold",
     marginBottom: 7,
   },
 
   exploreTitle: {
-    color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
   },
 
   exploreDescription: {
-    color: "#888888",
     fontSize: 12,
     lineHeight: 17,
     marginTop: 5,
-    maxWidth: 280,
-  },
-
-  arrow: {
-    color: "#8B5CF6",
-    fontSize: 30,
-    marginLeft: 10,
   },
 
   // BOTTOM NAVIGATION
@@ -404,34 +776,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 75,
-    backgroundColor: "#151515",
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
     borderTopWidth: 1,
-    borderTopColor: "#292929",
   },
 
   navItem: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-  },
-
-  navIcon: {
-    color: "#777777",
-    fontSize: 20,
-    marginBottom: 3,
+    gap: 4,
   },
 
   navText: {
-    color: "#777777",
     fontSize: 11,
-  },
-
-  activeNavIcon: {
-    color: "#8B5CF6",
-    fontSize: 22,
-    marginBottom: 3,
   },
 
   activeNavText: {

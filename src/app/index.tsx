@@ -15,6 +15,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebase";
+import { setAuthToken } from "../constants/api";
+import { setAuthToken as setServicesAuthToken } from "../services/api";
+
+const ADMIN_EMAIL = "tshepangmatsane15@gmail.com";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -23,7 +27,9 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password) {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
       Alert.alert("Missing Information", "Please enter your email and password.");
       return;
     }
@@ -31,8 +37,23 @@ export default function LoginScreen() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.replace("/(student)/dashboard");
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        cleanEmail,
+        password
+      );
+
+      // Acquire and sync the Firebase Auth Token with backend API clients
+      const token = await userCredential.user.getIdToken();
+      setAuthToken(token);
+      setServicesAuthToken(token);
+
+      // Route admin users to the Admin Portal, students to Student Dashboard
+      if (cleanEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        router.replace("/admin/adminindex");
+      } else {
+        router.replace("/(student)/dashboard");
+      }
     } catch (error: any) {
       let message = "Unable to sign in. Please try again.";
 

@@ -1,9 +1,10 @@
-
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -13,18 +14,7 @@ import {
 } from "react-native";
 
 import { useAppTheme } from "../context/ThemeContext";
-
-type CourseworkItem = {
-  id: number;
-  title: string;
-  course: string;
-  dueDate: string;
-  status: "Not Started" | "In Progress" | "Completed";
-};
-
-// Real coursework will be loaded from the backend.
-// No demonstration assignments are displayed.
-const coursework: CourseworkItem[] = [];
+import api, { CourseworkDTO } from "../constants/api";
 
 export default function CourseworkScreen() {
   const { colors, isDark } = useAppTheme();
@@ -32,24 +22,124 @@ export default function CourseworkScreen() {
   const purple = "#8B5CF6";
   const purpleText = isDark ? "#A78BFA" : "#6D28D9";
 
+  const [coursework, setCoursework] = useState<CourseworkDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // =======================================================
+  // LOAD COURSEWORK
+  // =======================================================
+
+  const loadCoursework = useCallback(async () => {
+    try {
+      setError(null);
+
+      const data = await api.coursework.getAll();
+
+      setCoursework(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error("[Coursework] Failed to load coursework:", err);
+
+      setError(
+        err?.message ||
+          "Unable to load coursework. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCoursework();
+  }, [loadCoursework]);
+
+  // =======================================================
+  // REFRESH
+  // =======================================================
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      await loadCoursework();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCoursework]);
+
+  // =======================================================
+  // RETRY
+  // =======================================================
+
+  const handleRetry = async () => {
+    setLoading(true);
+    await loadCoursework();
+  };
+
+  // =======================================================
+  // DATE FORMATTING
+  // =======================================================
+
+  const formatDueDate = (
+    dueDate?: string | null
+  ): string => {
+    if (!dueDate) {
+      return "No due date";
+    }
+
+    const parsedDate = new Date(dueDate);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return dueDate;
+    }
+
+    return `Due ${parsedDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })}`;
+  };
+
+  // =======================================================
+  // COURSE COUNTS
+  // =======================================================
+
   const total = coursework.length;
 
-  const inProgress = coursework.filter(
-    (item) => item.status === "In Progress"
-  ).length;
+  /*
+   * Student progress tracking has not been implemented
+   * in the backend yet.
+   *
+   * Do not fabricate "In Progress" or "Completed" values.
+   */
+  const inProgress = 0;
+  const completed = 0;
 
-  const completed = coursework.filter(
-    (item) => item.status === "Completed"
-  ).length;
+  // =======================================================
+  // NAVIGATION
+  // =======================================================
+
+  const openCoursework = (item: CourseworkDTO) => {
+    router.push({
+      pathname: "/assessments",
+      params: {
+        courseworkId: item.courseID,
+      },
+    });
+  };
 
   return (
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: colors.background },
+        {
+          backgroundColor: colors.background,
+        },
       ]}
     >
       {/* HEADER */}
+
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -69,7 +159,9 @@ export default function CourseworkScreen() {
         <Text
           style={[
             styles.title,
-            { color: colors.text },
+            {
+              color: colors.text,
+            },
           ]}
         >
           My Coursework
@@ -78,28 +170,45 @@ export default function CourseworkScreen() {
         <Text
           style={[
             styles.subtitle,
-            { color: colors.textSecondary },
+            {
+              color: colors.textSecondary,
+            },
           ]}
         >
           View your assignments and programming activities.
         </Text>
       </View>
 
+      {/* CONTENT */}
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={purple}
+            colors={[purple]}
+          />
+        }
       >
         {/* COURSEWORK OVERVIEW */}
+
         <View
           style={[
             styles.overviewCard,
-            { backgroundColor: colors.backgroundElement },
+            {
+              backgroundColor: colors.backgroundElement,
+            },
           ]}
         >
           <Text
             style={[
               styles.overviewTitle,
-              { color: colors.text },
+              {
+                color: colors.text,
+              },
             ]}
           >
             Coursework Overview
@@ -114,7 +223,9 @@ export default function CourseworkScreen() {
               <Text
                 style={[
                   styles.statLabel,
-                  { color: colors.textSecondary },
+                  {
+                    color: colors.textSecondary,
+                  },
                 ]}
               >
                 Total
@@ -129,7 +240,9 @@ export default function CourseworkScreen() {
               <Text
                 style={[
                   styles.statLabel,
-                  { color: colors.textSecondary },
+                  {
+                    color: colors.textSecondary,
+                  },
                 ]}
               >
                 In Progress
@@ -144,7 +257,9 @@ export default function CourseworkScreen() {
               <Text
                 style={[
                   styles.statLabel,
-                  { color: colors.textSecondary },
+                  {
+                    color: colors.textSecondary,
+                  },
                 ]}
               >
                 Completed
@@ -153,20 +268,119 @@ export default function CourseworkScreen() {
           </View>
         </View>
 
-        {/* ASSIGNMENTS */}
+        {/* SECTION TITLE */}
+
         <Text
           style={[
             styles.sectionTitle,
-            { color: colors.text },
+            {
+              color: colors.text,
+            },
           ]}
         >
           Your Assignments
         </Text>
 
-        {coursework.length === 0 ? (
+        {/* INITIAL LOADING */}
+
+        {loading && !refreshing ? (
           <View
             style={[
-              styles.emptyCard,
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <ActivityIndicator
+              size="large"
+              color={purple}
+            />
+
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Loading coursework
+            </Text>
+
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Retrieving your coursework from DevMate.
+            </Text>
+          </View>
+        ) : error ? (
+          /* ERROR STATE */
+
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={42}
+              color={purple}
+            />
+
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Unable to load coursework
+            </Text>
+
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              {error}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={handleRetry}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.retryButtonText}>
+                Try Again
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : coursework.length === 0 ? (
+          /* REAL EMPTY STATE */
+
+          <View
+            style={[
+              styles.stateCard,
               {
                 backgroundColor: colors.backgroundElement,
                 borderColor: colors.border,
@@ -181,8 +395,10 @@ export default function CourseworkScreen() {
 
             <Text
               style={[
-                styles.emptyTitle,
-                { color: colors.text },
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
               ]}
             >
               No assignments available
@@ -190,22 +406,27 @@ export default function CourseworkScreen() {
 
             <Text
               style={[
-                styles.emptyDescription,
-                { color: colors.textSecondary },
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
               ]}
             >
-              Your assignments will appear here once
-              coursework is available.
+              Your assignments will appear here once coursework
+              is available.
             </Text>
           </View>
         ) : (
+          /* REAL COURSEWORK */
+
           coursework.map((item) => (
             <View
-              key={item.id}
+              key={item.courseID}
               style={[
                 styles.courseworkCard,
                 {
                   backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
                 },
               ]}
             >
@@ -213,10 +434,12 @@ export default function CourseworkScreen() {
                 <Text
                   style={[
                     styles.courseName,
-                    { color: purpleText },
+                    {
+                      color: purpleText,
+                    },
                   ]}
                 >
-                  {item.course}
+                  {item.module || "Coursework"}
                 </Text>
 
                 <View
@@ -232,10 +455,12 @@ export default function CourseworkScreen() {
                   <Text
                     style={[
                       styles.statusText,
-                      { color: purpleText },
+                      {
+                        color: purpleText,
+                      },
                     ]}
                   >
-                    {item.status}
+                    AVAILABLE
                   </Text>
                 </View>
               </View>
@@ -243,34 +468,53 @@ export default function CourseworkScreen() {
               <Text
                 style={[
                   styles.assignmentTitle,
-                  { color: colors.text },
+                  {
+                    color: colors.text,
+                  },
                 ]}
               >
                 {item.title}
               </Text>
 
-              <Text
-                style={[
-                  styles.dueDate,
-                  { color: colors.textSecondary },
-                ]}
-              >
-                {item.dueDate}
-              </Text>
+              {item.description ? (
+                <Text
+                  numberOfLines={3}
+                  style={[
+                    styles.description,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {item.description}
+                </Text>
+              ) : null}
+
+              <View style={styles.metadataRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={15}
+                  color={colors.textSecondary}
+                />
+
+                <Text
+                  style={[
+                    styles.dueDate,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {formatDueDate(item.dueDate)}
+                </Text>
+              </View>
 
               <TouchableOpacity
                 style={styles.viewButton}
-                onPress={() =>
-                  router.push({
-                    pathname: "/assessments",
-                    params: {
-                      courseworkId: String(item.id),
-                    },
-                  })
-                }
+                onPress={() => openCoursework(item)}
               >
                 <Text style={styles.viewButtonText}>
-                  View Assessments
+                  View Course
                 </Text>
 
                 <Ionicons
@@ -285,6 +529,7 @@ export default function CourseworkScreen() {
       </ScrollView>
 
       {/* BOTTOM NAVIGATION */}
+
       <View
         style={[
           styles.bottomNavigation,
@@ -307,7 +552,9 @@ export default function CourseworkScreen() {
           <Text
             style={[
               styles.navText,
-              { color: colors.textSecondary },
+              {
+                color: colors.textSecondary,
+              },
             ]}
           >
             Home
@@ -327,7 +574,9 @@ export default function CourseworkScreen() {
           <Text
             style={[
               styles.navText,
-              { color: colors.textSecondary },
+              {
+                color: colors.textSecondary,
+              },
             ]}
           >
             Learn
@@ -432,6 +681,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 18,
     marginBottom: 15,
+    borderWidth: 1,
   },
 
   cardTop: {
@@ -439,6 +689,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+    gap: 12,
   },
 
   courseName: {
@@ -461,12 +712,24 @@ const styles = StyleSheet.create({
   assignmentTitle: {
     fontSize: 17,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+
+  description: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+
+  metadataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 18,
   },
 
   dueDate: {
     fontSize: 12,
-    marginBottom: 18,
   },
 
   viewButton: {
@@ -485,7 +748,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  emptyCard: {
+  stateCard: {
     borderWidth: 1,
     borderRadius: 14,
     padding: 28,
@@ -493,18 +756,35 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
 
-  emptyTitle: {
+  stateTitle: {
     fontSize: 17,
     fontWeight: "bold",
     marginTop: 14,
     textAlign: "center",
   },
 
-  emptyDescription: {
+  stateDescription: {
     fontSize: 13,
     lineHeight: 20,
     textAlign: "center",
     marginTop: 8,
+  },
+
+  retryButton: {
+    backgroundColor: "#8B5CF6",
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "bold",
   },
 
   bottomNavigation: {

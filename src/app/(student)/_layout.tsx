@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 
 export default function StudentTabsLayout() {
-  // Get the current theme
   const { isDark, colors } = useAppTheme();
 
   return (
@@ -13,13 +12,11 @@ export default function StudentTabsLayout() {
       screenOptions={{
         headerShown: false,
 
-        // Active and inactive navigation colours
         tabBarActiveTintColor: "#8B5CF6",
         tabBarInactiveTintColor: isDark
           ? "#999999"
           : "#777777",
 
-        // Navigation bar appearance
         tabBarStyle: {
           backgroundColor: isDark ? "#151515" : "#FFFFFF",
           borderTopColor: isDark ? "#292929" : "#E5E5E5",
@@ -29,7 +26,6 @@ export default function StudentTabsLayout() {
           paddingBottom: 8,
         },
 
-        // Screen background
         sceneStyle: {
           backgroundColor: colors.background,
         },
@@ -63,6 +59,21 @@ export default function StudentTabsLayout() {
           tabBarIcon: ({ color, size }) => (
             <Ionicons
               name="book-outline"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      {/* ANALYTICS */}
+      <Tabs.Screen
+        name="analys"
+        options={{
+          title: "Analytics",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons
+              name="stats-chart-outline"
               size={size}
               color={color}
             />

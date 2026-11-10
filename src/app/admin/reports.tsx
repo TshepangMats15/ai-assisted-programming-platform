@@ -1,4 +1,3 @@
-
 import React, { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,11 +13,7 @@ import {
   View,
 } from "react-native";
 
-import api, {
-  AnalyticsSummary,
-  ResultRecord,
-  SubmissionRecord,
-} from "../../constants/api";
+import api, { ReportsAnalytics } from "../../constants/api";
 
 const COLORS = {
   background: "#0D0D0D",
@@ -30,132 +25,37 @@ const COLORS = {
   secondary: "#A3A3A3",
   muted: "#888888",
   border: "#292929",
+  red: "#EF4444",
   green: "#4ADE80",
 };
 
-type ReportData = {
-  summary: AnalyticsSummary | null;
-  results: ResultRecord[] | null;
-  submissions: SubmissionRecord[] | null;
-  aiUsage: unknown[] | null;
-};
-
-function validNumber(value: unknown): number | null {
-  if (
-    typeof value === "number" &&
-    Number.isFinite(value) &&
-    value >= 0
-  ) {
-    return value;
-  }
-
-  return null;
-}
-
-function formatNumber(value: number | null): string {
-  return value === null
-    ? "Unavailable"
-    : value.toLocaleString();
-}
-
-function formatDate(value: unknown): string {
-  if (typeof value !== "string" || !value.trim()) {
-    return "Unknown date";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown date";
-  }
-
-  return date.toLocaleDateString("en-ZA", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 export default function AdminReportsScreen() {
-  const [data, setData] = useState<ReportData>({
-    summary: null,
-    results: null,
-    submissions: null,
-    aiUsage: null,
-  });
+  const [reports, setReports] = useState<ReportsAnalytics | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // =========================================================
+  // LOAD REPORT DATA FROM SPRING BOOT
+  // GET /api/analytics/reports
+  // =========================================================
+
   const loadReports = useCallback(async () => {
     try {
       setErrorMessage("");
 
-      const [
-        summaryResult,
-        resultsResult,
-        submissionsResult,
-        aiUsageResult,
-      ] = await Promise.allSettled([
-        api.analytics.getSummary(),
-        api.results.getAll(),
-        api.submissions.getAll(),
-        api.analytics.getAiUsage(),
-      ]);
+      const response = await api.analytics.getReports();
 
-      const summary =
-        summaryResult.status === "fulfilled" &&
-        summaryResult.value &&
-        typeof summaryResult.value === "object" &&
-        !Array.isArray(summaryResult.value)
-          ? summaryResult.value
-          : null;
+      setReports(response);
+    } catch (error: any) {
+      console.error("Failed to load reports:", error);
 
-      const results =
-        resultsResult.status === "fulfilled" &&
-        Array.isArray(resultsResult.value)
-          ? resultsResult.value
-          : null;
+      setReports(null);
 
-      const submissions =
-        submissionsResult.status === "fulfilled" &&
-        Array.isArray(submissionsResult.value)
-          ? submissionsResult.value
-          : null;
-
-      const aiUsage =
-        aiUsageResult.status === "fulfilled" &&
-        Array.isArray(aiUsageResult.value)
-          ? aiUsageResult.value
-          : null;
-
-      setData({
-        summary,
-        results,
-        submissions,
-        aiUsage,
-      });
-
-      const failedCount = [
-        summary === null,
-        results === null,
-        submissions === null,
-        aiUsage === null,
-      ].filter(Boolean).length;
-
-      if (failedCount === 4) {
-        setErrorMessage(
-          "Reports could not be loaded. Please check your backend connection and try again."
-        );
-      } else if (failedCount > 0) {
-        setErrorMessage(
-          "Some report information is unavailable. Successfully loaded data is shown below."
-        );
-      }
-    } catch {
       setErrorMessage(
-        "An unexpected error occurred while loading reports."
+        error?.message ||
+          "Reports could not be loaded. Please check your backend connection."
       );
     } finally {
       setLoading(false);
@@ -163,69 +63,74 @@ export default function AdminReportsScreen() {
     }
   }, []);
 
+  // =========================================================
+  // INITIAL LOAD
+  // =========================================================
+
   useEffect(() => {
     loadReports();
   }, [loadReports]);
 
-  function refreshReports() {
+  // =========================================================
+  // REFRESH
+  // =========================================================
+
+  const refreshReports = () => {
     setRefreshing(true);
     loadReports();
-  }
+  };
 
-  function goBack() {
+  // =========================================================
+  // NAVIGATION
+  // =========================================================
+
+  const goBack = () => {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace("/admin/adminindex");
+      router.replace("/admin/adminindex" as any);
     }
+  };
+
+  // =========================================================
+  // LOADING SCREEN
+  // =========================================================
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator
+            size="large"
+            color={COLORS.purple}
+          />
+
+          <Text style={styles.loadingText}>
+            Loading reports...
+          </Text>
+
+          <Text style={styles.loadingSubtext}>
+            Connecting to DevMate backend
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
   }
 
-  const totalAssessments = validNumber(
-    data.summary?.totalAssessments
-  );
-
-  const totalSubmissions =
-    validNumber(data.summary?.totalSubmissions) ??
-    (data.submissions !== null
-      ? data.submissions.length
-      : null);
-
-  const averageScore = validNumber(
-    data.summary?.averageScore
-  );
-
-  const totalAiInteractions = validNumber(
-    data.summary?.totalAiInteractions
-  );
-
-  const recentResults =
-    data.results === null
-      ? []
-      : [...data.results]
-          .sort((a, b) => {
-            const dateA = new Date(
-              a.submittedAt ?? ""
-            ).getTime();
-
-            const dateB = new Date(
-              b.submittedAt ?? ""
-            ).getTime();
-
-            return (
-              (Number.isFinite(dateB) ? dateB : 0) -
-              (Number.isFinite(dateA) ? dateA : 0)
-            );
-          })
-          .slice(0, 8);
+  // =========================================================
+  // MAIN SCREEN
+  // =========================================================
 
   return (
     <SafeAreaView style={styles.container}>
       {/* HEADER */}
+
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={goBack}
           accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons
             name="arrow-back"
@@ -247,301 +152,233 @@ export default function AdminReportsScreen() {
         <TouchableOpacity
           style={styles.refreshButton}
           onPress={refreshReports}
-          disabled={loading || refreshing}
+          disabled={refreshing}
           accessibilityRole="button"
           accessibilityLabel="Refresh reports"
         >
-          <Ionicons
-            name="refresh"
-            size={21}
-            color={COLORS.lightPurple}
-          />
+          {refreshing ? (
+            <ActivityIndicator
+              size="small"
+              color={COLORS.lightPurple}
+            />
+          ) : (
+            <Ionicons
+              name="refresh"
+              size={21}
+              color={COLORS.lightPurple}
+            />
+          )}
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator
-            size="large"
-            color={COLORS.purple}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshReports}
+            tintColor={COLORS.purple}
+            colors={[COLORS.purple]}
           />
+        }
+      >
+        <Text style={styles.pageDescription}>
+          Review assessment performance, submissions,
+          results and AI activity across DevMate.
+        </Text>
 
-          <Text style={styles.loadingText}>
-            Loading reports...
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={refreshReports}
-              tintColor={COLORS.purple}
-              colors={[COLORS.purple]}
+        {/* ERROR */}
+
+        {errorMessage !== "" && (
+          <View style={styles.errorCard}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={23}
+              color={COLORS.red}
             />
-          }
-        >
-          <Text style={styles.pageDescription}>
-            Review assessment performance, submissions
-            and AI activity across DevMate.
-          </Text>
 
-          {/* DATA STATUS */}
-          {errorMessage !== "" && (
-            <View style={styles.noticeCard}>
-              <Ionicons
-                name="information-circle-outline"
-                size={21}
-                color={COLORS.lightPurple}
-              />
+            <View style={styles.errorContent}>
+              <Text style={styles.errorTitle}>
+                Reports could not be loaded
+              </Text>
 
-              <Text style={styles.noticeText}>
+              <Text style={styles.errorText}>
                 {errorMessage}
               </Text>
-            </View>
-          )}
 
-          {/* OVERVIEW */}
-          <Text style={styles.sectionTitle}>
-            Platform Overview
-          </Text>
-
-          <View style={styles.metricsRow}>
-            <MetricCard
-              title="Assessments"
-              value={formatNumber(totalAssessments)}
-              icon="clipboard-outline"
-            />
-
-            <MetricCard
-              title="Submissions"
-              value={formatNumber(totalSubmissions)}
-              icon="document-text-outline"
-            />
-          </View>
-
-          <View style={styles.metricsRow}>
-            <MetricCard
-              title="Average Score"
-              value={
-                averageScore === null
-                  ? "Unavailable"
-                  : `${averageScore}%`
-              }
-              icon="analytics-outline"
-            />
-
-            <MetricCard
-              title="AI Interactions"
-              value={formatNumber(totalAiInteractions)}
-              icon="chatbubbles-outline"
-            />
-          </View>
-
-          {/* PERFORMANCE SECTION */}
-          <Text style={styles.sectionTitle}>
-            Performance Summary
-          </Text>
-
-          <View style={styles.performanceCard}>
-            <View style={styles.performanceHeader}>
-              <View style={styles.performanceIcon}>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={loadReports}
+              >
                 <Ionicons
-                  name="school-outline"
-                  size={24}
-                  color={COLORS.lightPurple}
+                  name="refresh"
+                  size={17}
+                  color={COLORS.white}
                 />
-              </View>
 
-              <View style={styles.performanceHeaderText}>
-                <Text style={styles.cardTitle}>
-                  Student Performance
+                <Text style={styles.retryText}>
+                  Try Again
                 </Text>
-
-                <Text style={styles.cardSubtitle}>
-                  Based on available backend results
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.performanceRow}>
-              <Text style={styles.performanceLabel}>
-                Results recorded
-              </Text>
-
-              <Text style={styles.performanceValue}>
-                {formatNumber(
-                  data.results === null
-                    ? null
-                    : data.results.length
-                )}
-              </Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.performanceRow}>
-              <Text style={styles.performanceLabel}>
-                Average score
-              </Text>
-
-              <Text style={styles.performanceValue}>
-                {averageScore === null
-                  ? "Unavailable"
-                  : `${averageScore}%`}
-              </Text>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.performanceRow}>
-              <Text style={styles.performanceLabel}>
-                Submission records
-              </Text>
-
-              <Text style={styles.performanceValue}>
-                {formatNumber(
-                  data.submissions === null
-                    ? null
-                    : data.submissions.length
-                )}
-              </Text>
+              </TouchableOpacity>
             </View>
           </View>
+        )}
 
-          {/* RECENT RESULTS */}
-          <Text style={styles.sectionTitle}>
-            Recent Assessment Results
-          </Text>
+        {/* PLATFORM OVERVIEW */}
 
-          <View style={styles.resultsCard}>
-            <View style={styles.resultsHeader}>
-              <Text
-                style={[
-                  styles.tableHeader,
-                  styles.colStudent,
-                ]}
-              >
-                Student ID
-              </Text>
+        <Text style={styles.sectionTitle}>
+          Platform Overview
+        </Text>
 
-              <Text
-                style={[
-                  styles.tableHeader,
-                  styles.colAssessment,
-                ]}
-              >
-                Assessment
-              </Text>
+        <View style={styles.metricsRow}>
+          <MetricCard
+            title="Assessments"
+            value={formatNumber(reports?.assessments)}
+            icon="clipboard-outline"
+          />
 
-              <Text
-                style={[
-                  styles.tableHeader,
-                  styles.colScore,
-                ]}
-              >
-                Score
-              </Text>
-            </View>
+          <MetricCard
+            title="Submissions"
+            value={formatNumber(reports?.submissions)}
+            icon="document-text-outline"
+          />
+        </View>
 
-            {data.results === null ? (
-              <EmptyState
-                message="Assessment results are unavailable."
-              />
-            ) : recentResults.length === 0 ? (
-              <EmptyState
-                message="No assessment results have been recorded."
-              />
-            ) : (
-              recentResults.map((item, index) => (
-                <View
-                  key={String(
-                    item.resultId ?? index
-                  )}
-                  style={[
-                    styles.resultRow,
-                    index < recentResults.length - 1 &&
-                      styles.resultDivider,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tableCell,
-                      styles.colStudent,
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {item.userId
-                      ? String(item.userId)
-                      : "Unknown"}
-                  </Text>
+        <View style={styles.metricsRow}>
+          <MetricCard
+            title="Average Score"
+            value={formatPercentage(reports?.averageScore)}
+            icon="analytics-outline"
+          />
 
-                  <Text
-                    style={[
-                      styles.tableCell,
-                      styles.colAssessment,
-                    ]}
-                    numberOfLines={2}
-                  >
-                    {item.assessmentId != null
-                      ? `#${item.assessmentId}`
-                      : "Unknown"}
-                  </Text>
+          <MetricCard
+            title="AI Interactions"
+            value={formatNumber(reports?.aiInteractions)}
+            icon="chatbubbles-outline"
+          />
+        </View>
 
-                  <Text
-                    style={[
-                      styles.tableCell,
-                      styles.colScore,
-                      styles.scoreText,
-                    ]}
-                  >
-                    {validNumber(item.score) === null
-                      ? "—"
-                      : `${item.score}%`}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
+        {/* PERFORMANCE */}
 
-          {/* AI DATA STATUS */}
-          <View style={styles.aiCard}>
-            <View style={styles.aiIcon}>
+        <Text style={styles.sectionTitle}>
+          Performance Summary
+        </Text>
+
+        <View style={styles.performanceCard}>
+          <View style={styles.performanceHeader}>
+            <View style={styles.performanceIcon}>
               <Ionicons
-                name="sparkles-outline"
-                size={23}
+                name="school-outline"
+                size={24}
                 color={COLORS.lightPurple}
               />
             </View>
 
-            <View style={styles.aiContent}>
+            <View style={styles.performanceHeaderText}>
               <Text style={styles.cardTitle}>
-                AI Analytics
+                Student Performance
               </Text>
 
-              <Text style={styles.aiDescription}>
-                {data.aiUsage === null
-                  ? "Detailed AI usage data is currently unavailable."
-                  : data.aiUsage.length === 0
-                  ? "No course-level AI usage records were returned."
-                  : `${data.aiUsage.length} AI usage records returned by the backend.`}
+              <Text style={styles.cardSubtitle}>
+                Live analytics from the DevMate backend
               </Text>
             </View>
           </View>
 
-          <Text style={styles.footerText}>
-            Report figures are based on available API data.
-            No sample statistics are inserted.
-          </Text>
-        </ScrollView>
-      )}
+          <PerformanceRow
+            label="Assessments"
+            value={formatNumber(reports?.assessments)}
+          />
+
+          <View style={styles.divider} />
+
+          <PerformanceRow
+            label="Submissions"
+            value={formatNumber(reports?.submissions)}
+          />
+
+          <View style={styles.divider} />
+
+          <PerformanceRow
+            label="Results recorded"
+            value={formatNumber(reports?.resultsRecorded)}
+          />
+
+          <View style={styles.divider} />
+
+          <PerformanceRow
+            label="Average score"
+            value={formatPercentage(reports?.averageScore)}
+          />
+        </View>
+
+        {/* AI ANALYTICS */}
+
+        <Text style={styles.sectionTitle}>
+          AI Analytics
+        </Text>
+
+        <View style={styles.aiCard}>
+          <View style={styles.aiIcon}>
+            <Ionicons
+              name="sparkles-outline"
+              size={24}
+              color={COLORS.lightPurple}
+            />
+          </View>
+
+          <View style={styles.aiContent}>
+            <Text style={styles.cardTitle}>
+              Gemini AI Usage
+            </Text>
+
+            <Text style={styles.aiDescription}>
+              Total AI interactions recorded by DevMate.
+            </Text>
+
+            <Text style={styles.aiValue}>
+              {formatNumber(reports?.aiInteractions)}
+            </Text>
+          </View>
+        </View>
+
+        {/* CONNECTION STATUS */}
+
+        <View style={styles.statusCard}>
+          <View
+            style={[
+              styles.statusDot,
+              reports ? styles.statusOnline : styles.statusOffline,
+            ]}
+          />
+
+          <View style={styles.statusContent}>
+            <Text style={styles.statusTitle}>
+              Backend Status
+            </Text>
+
+            <Text style={styles.statusText}>
+              {reports
+                ? "Reports successfully loaded from the DevMate backend."
+                : "Report data is currently unavailable."}
+            </Text>
+          </View>
+        </View>
+
+        <Text style={styles.footerText}>
+          Report figures are retrieved from the DevMate
+          analytics API. No sample statistics are inserted
+          by this screen.
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ================= REUSABLE COMPONENTS =================
+// =========================================================
+// COMPONENTS
+// =========================================================
 
 function MetricCard({
   title,
@@ -581,27 +418,57 @@ function MetricCard({
   );
 }
 
-function EmptyState({
-  message,
+function PerformanceRow({
+  label,
+  value,
 }: {
-  message: string;
+  label: string;
+  value: string;
 }) {
   return (
-    <View style={styles.emptyContainer}>
-      <Ionicons
-        name="document-text-outline"
-        size={28}
-        color={COLORS.lightPurple}
-      />
+    <View style={styles.performanceRow}>
+      <Text style={styles.performanceLabel}>
+        {label}
+      </Text>
 
-      <Text style={styles.emptyText}>
-        {message}
+      <Text style={styles.performanceValue}>
+        {value}
       </Text>
     </View>
   );
 }
 
-// ================= STYLES =================
+// =========================================================
+// FORMATTERS
+// =========================================================
+
+function formatNumber(value: unknown): string {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0
+  ) {
+    return "Unavailable";
+  }
+
+  return value.toLocaleString();
+}
+
+function formatPercentage(value: unknown): string {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < 0
+  ) {
+    return "Unavailable";
+  }
+
+  return `${value.toFixed(1)}%`;
+}
+
+// =========================================================
+// STYLES
+// =========================================================
 
 const styles = StyleSheet.create({
   container: {
@@ -661,12 +528,20 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 30,
   },
 
   loadingText: {
-    color: COLORS.secondary,
-    fontSize: 13,
-    marginTop: 15,
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "600",
+    marginTop: 17,
+  },
+
+  loadingSubtext: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginTop: 7,
   },
 
   pageDescription: {
@@ -676,23 +551,51 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
 
-  noticeCard: {
-    backgroundColor: "#17131F",
-    borderColor: COLORS.purpleBackground,
+  errorCard: {
+    backgroundColor: "#211416",
+    borderColor: "#442024",
     borderWidth: 1,
     borderRadius: 12,
-    padding: 14,
+    padding: 15,
     flexDirection: "row",
     alignItems: "flex-start",
     marginBottom: 22,
   },
 
-  noticeText: {
-    color: "#D8B4FE",
-    fontSize: 12,
-    lineHeight: 19,
-    marginLeft: 10,
+  errorContent: {
     flex: 1,
+    marginLeft: 11,
+  },
+
+  errorTitle: {
+    color: "#FCA5A5",
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+
+  errorText: {
+    color: "#D1A5A5",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
+  },
+
+  retryButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.purple,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+
+  retryText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "bold",
+    marginLeft: 6,
   },
 
   sectionTitle: {
@@ -786,7 +689,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
 
   performanceLabel: {
@@ -805,93 +708,23 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.border,
   },
 
-  resultsCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    paddingHorizontal: 13,
-    marginBottom: 20,
-  },
-
-  resultsHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-
-  tableHeader: {
-    color: COLORS.muted,
-    fontSize: 11,
-    fontWeight: "bold",
-  },
-
-  resultRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 15,
-  },
-
-  resultDivider: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-
-  tableCell: {
-    color: COLORS.secondary,
-    fontSize: 11,
-    lineHeight: 17,
-  },
-
-  colStudent: {
-    flex: 1.5,
-    paddingRight: 8,
-  },
-
-  colAssessment: {
-    flex: 1.1,
-    paddingRight: 8,
-  },
-
-  colScore: {
-    flex: 0.8,
-    textAlign: "right",
-  },
-
-  scoreText: {
-    color: COLORS.lightPurple,
-    fontWeight: "bold",
-  },
-
-  emptyContainer: {
-    alignItems: "center",
-    paddingVertical: 30,
-  },
-
-  emptyText: {
-    color: COLORS.secondary,
-    fontSize: 12,
-    textAlign: "center",
-    marginTop: 12,
-  },
-
   aiCard: {
     backgroundColor: COLORS.card,
     borderRadius: 12,
     padding: 17,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 25,
+    marginBottom: 20,
   },
 
   aiIcon: {
-    width: 46,
-    height: 46,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     backgroundColor: COLORS.purpleBackground,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: 13,
   },
 
   aiContent: {
@@ -901,8 +734,56 @@ const styles = StyleSheet.create({
   aiDescription: {
     color: COLORS.secondary,
     fontSize: 12,
-    lineHeight: 19,
-    marginTop: 6,
+    lineHeight: 18,
+    marginTop: 5,
+  },
+
+  aiValue: {
+    color: COLORS.lightPurple,
+    fontSize: 22,
+    fontWeight: "bold",
+    marginTop: 8,
+  },
+
+  statusCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 12,
+    padding: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 25,
+  },
+
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 12,
+  },
+
+  statusOnline: {
+    backgroundColor: COLORS.green,
+  },
+
+  statusOffline: {
+    backgroundColor: COLORS.red,
+  },
+
+  statusContent: {
+    flex: 1,
+  },
+
+  statusTitle: {
+    color: COLORS.white,
+    fontSize: 13,
+    fontWeight: "bold",
+  },
+
+  statusText: {
+    color: COLORS.secondary,
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
   },
 
   footerText: {

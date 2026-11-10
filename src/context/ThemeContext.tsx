@@ -2,27 +2,23 @@
 import React, {
   createContext,
   useContext,
+  useEffect,
   useState,
   ReactNode,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Colors } from "../constants/theme";
 
-// Define the colours for each theme
+const THEME_STORAGE_KEY = "devmate-theme";
+
 const lightColors = {
-  background: "#FFFFFF",
-  backgroundElement: "#F5F5F5",
-  backgroundSelected: "#E5E5E5",
-  text: "#111111",
-  textSecondary: "#777777",
+  ...Colors.light,
   primary: "#2563EB",
   border: "#E5E7EB",
 };
 
 const darkColors = {
-  background: "#0D0D0D",
-  backgroundElement: "#1A1A1A",
-  backgroundSelected: "#292929",
-  text: "#FFFFFF",
-  textSecondary: "#B0B0B0",
+  ...Colors.dark,
   primary: "#60A5FA",
   border: "#333333",
 };
@@ -48,15 +44,23 @@ export function ThemeProvider({
 }) {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
 
-  const isDark = theme === "dark";
+  useEffect(() => {
+    AsyncStorage.getItem(THEME_STORAGE_KEY).then((savedTheme) => {
+      if (savedTheme === "light" || savedTheme === "dark") {
+        setTheme(savedTheme);
+      }
+    });
+  }, []);
 
+  const isDark = theme === "dark";
   const colors = isDark ? darkColors : lightColors;
 
-  // Switch between light and dark mode
   const toggleTheme = () => {
-    setTheme((currentTheme) =>
-      currentTheme === "dark" ? "light" : "dark"
-    );
+    setTheme((currentTheme) => {
+      const nextTheme = currentTheme === "dark" ? "light" : "dark";
+      AsyncStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+      return nextTheme;
+    });
   };
 
   return (
