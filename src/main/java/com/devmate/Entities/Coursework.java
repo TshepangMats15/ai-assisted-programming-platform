@@ -5,6 +5,7 @@ import org.hibernate.annotations.Audited;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "coursework")
@@ -24,7 +25,7 @@ public class Coursework {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
-    @JsonFormat(pattern = "[yyyy-MM-dd HH:mm:ss][yyyy-MM-dd'T'HH:mm:ss][yyyy-MM-dd]")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     @Column(name = "due_date")
     private LocalDateTime dueDate;
 
@@ -41,8 +42,13 @@ public class Coursework {
     @JoinColumn(name = "post_assessment_id")
     private Assessment postAssessment;
 
-    // Related Instructional Content
-    @OneToMany(mappedBy = "coursework", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    // Lessons are retrieved separately through /api/lessons/course/{courseID}
+    @JsonIgnore
+    @OneToMany(
+        mappedBy = "coursework",
+        cascade = CascadeType.ALL,
+        fetch = FetchType.LAZY
+    )
     private List<Lesson> lessons;
 
     public Coursework() {}

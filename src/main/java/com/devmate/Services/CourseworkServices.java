@@ -116,8 +116,17 @@ public class CourseworkServices {
         existingCoursework.setDescription(updatedCoursework.getDescription());
         existingCoursework.setDueDate(updatedCoursework.getDueDate());
         existingCoursework.setCreatedBy(updatedCoursework.getCreatedBy());
-        existingCoursework.setPreAssessment(updatedCoursework.getPreAssessment());
-        existingCoursework.setPostAssessment(updatedCoursework.getPostAssessment());
+       if (updatedCoursework.getPreAssessment() != null) {
+            existingCoursework.setPreAssessment(
+            updatedCoursework.getPreAssessment()
+        );
+    }
+
+        if (updatedCoursework.getPostAssessment() != null) {
+            existingCoursework.setPostAssessment(
+        updatedCoursework.getPostAssessment()
+        );
+    }
 
         return courseWorkRepository.save(existingCoursework);
     }
