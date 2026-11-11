@@ -1,7 +1,6 @@
 package com.devmate.Entities;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.Audited;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -9,7 +8,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "coursework")
-@Audited
+
 public class Coursework {
 
     @Id

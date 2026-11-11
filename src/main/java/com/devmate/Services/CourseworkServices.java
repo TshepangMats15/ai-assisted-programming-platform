@@ -117,14 +117,12 @@ public class CourseworkServices {
         existingCoursework.setDueDate(updatedCoursework.getDueDate());
         existingCoursework.setCreatedBy(updatedCoursework.getCreatedBy());
        if (updatedCoursework.getPreAssessment() != null) {
-            existingCoursework.setPreAssessment(
-            updatedCoursework.getPreAssessment()
+            existingCoursework.setPreAssessment(updatedCoursework.getPreAssessment()
         );
     }
 
         if (updatedCoursework.getPostAssessment() != null) {
-            existingCoursework.setPostAssessment(
-        updatedCoursework.getPostAssessment()
+            existingCoursework.setPostAssessment(updatedCoursework.getPostAssessment()
         );
     }
 

@@ -1,3 +1,4 @@
+
 package com.devmate.Entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -22,7 +23,7 @@ public class Lesson {
     private String title;
 
     @Column(name = "content_type", nullable = false)
-    private String contentType; // "READING", "VIDEO", "CODE_LAB"
+    private String contentType;
 
     @Column(name = "content_body", columnDefinition = "LONGTEXT")
     private String contentBody;
@@ -30,8 +31,13 @@ public class Lesson {
     public Lesson() {
     }
 
-    public Lesson(String lessonID, Coursework coursework, String title, 
-                  String contentType, String contentBody) {
+    public Lesson(
+            String lessonID,
+            Coursework coursework,
+            String title,
+            String contentType,
+            String contentBody
+    ) {
         this.lessonID = lessonID;
         this.coursework = coursework;
         this.title = title;
