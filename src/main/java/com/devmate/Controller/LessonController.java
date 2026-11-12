@@ -1,4 +1,4 @@
-package com.devmate.Controller;
+﻿package com.devmate.Controller;
 
 import com.devmate.Entities.Lesson;
 import com.devmate.Services.LessonServices;
@@ -10,7 +10,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/lessons")
-@CrossOrigin(origins = "*")
 public class LessonController {
 
     private final LessonServices lessonServices;

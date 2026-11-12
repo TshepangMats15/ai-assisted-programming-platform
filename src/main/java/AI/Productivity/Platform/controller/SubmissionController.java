@@ -1,4 +1,4 @@
-package AI.Productivity.Platform.controller;
+﻿package AI.Productivity.Platform.controller;
 
 import AI.Productivity.Platform.dto.SubmissionRequest;
 import AI.Productivity.Platform.dto.SubmissionResponse;
@@ -12,7 +12,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/submissions")
-@CrossOrigin(origins = "*")
 public class SubmissionController {
 
     private final SubmissionService submissionService;
