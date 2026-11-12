@@ -1,4 +1,4 @@
-﻿package com.devmate.Controller;
+package com.devmate.Controller;
 
 import com.devmate.Entities.AIInteraction;
 import com.devmate.Services.AIPromptServices;
@@ -11,6 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai")
+
 public class AIPromptController {
 
     private final AIPromptServices promptService;

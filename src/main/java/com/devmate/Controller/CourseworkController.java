@@ -1,4 +1,4 @@
-﻿
+
 package com.devmate.Controller;
 
 import com.devmate.Entities.Coursework;
@@ -12,6 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/coursework")
+
 public class CourseworkController {
 
     private final CourseworkServices courseworkServices;
@@ -72,4 +73,3 @@ public class CourseworkController {
         return ResponseEntity.noContent().build();
     }
 }
-

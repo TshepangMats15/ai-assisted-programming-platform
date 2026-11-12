@@ -20,7 +20,7 @@ public class SecurityConfig {
             throws Exception {
 
         http
-            // Use CORS configuration from CorsConfig.java
+            // Enable CORS with default configuration
             .cors(Customizer.withDefaults())
 
             // Disable CSRF for the stateless REST API

@@ -3,11 +3,11 @@ package com.devmate.Entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import org.hibernate.annotations.Audited;
+
 
 @Entity
 @Table(name = "lessons")
-@Audited
+
 public class Lesson {
 
     @Id

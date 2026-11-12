@@ -1,8 +1,9 @@
-﻿
+
 package com.devmate.Controller;
 
 import com.devmate.Services.AnalyticsServices;
 import org.springframework.http.ResponseEntity;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
@@ -17,6 +18,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/analytics")
+
 public class AnalyticsController {
 
     private final AnalyticsServices analyticsService;

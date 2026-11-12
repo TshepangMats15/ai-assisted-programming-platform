@@ -1,4 +1,4 @@
-﻿package com.devmate.Controller;
+package com.devmate.Controller;
 
 import com.devmate.Entities.Assessment;
 import com.devmate.Entities.Question;
@@ -11,6 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/assessments")
+
 public class AssessmentController {
     private final AssessmentServices assessmentServices;
 

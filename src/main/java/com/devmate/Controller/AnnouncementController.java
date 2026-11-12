@@ -1,4 +1,4 @@
-﻿
+
 package com.devmate.Controller;
 
 import com.devmate.Entities.Announcement;
@@ -12,6 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/announcements")
+
 public class AnnouncementController {
 
     private final AnnouncementRepository announcementRepository;
@@ -77,4 +78,3 @@ public class AnnouncementController {
         return ResponseEntity.noContent().build();
     }
 }
-
