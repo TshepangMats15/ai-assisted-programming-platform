@@ -16,9 +16,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/admin")
 public class FirebaseStudentsController {
+
+    private static final Logger log =
+        LoggerFactory.getLogger(FirebaseStudentsController.class);
 
     @Value("${devmate.admin.email}")
     private String adminEmail;
@@ -47,10 +53,16 @@ public class FirebaseStudentsController {
                             true
                     );
         } catch (FirebaseAuthException e) {
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "Invalid Firebase token"));
-        }
+    log.warn(
+        "Firebase token verification failed: code={}, message={}",
+        e.getAuthErrorCode(),
+        e.getMessage()
+    );
+
+    return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .body(Map.of("message", "Invalid Firebase token"));
+}
 
         // Use Firebase's verified user record, not a client-supplied email.
         UserRecord caller = FirebaseAuth.getInstance()
