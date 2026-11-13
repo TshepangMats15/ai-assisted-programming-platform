@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class FirebaseConfig {
 
+    private static final String FIREBASE_PROJECT_ID = "itdma-28c29";
+
     @PostConstruct
     public void initializeFirebase() {
         if (!FirebaseApp.getApps().isEmpty()) {
@@ -42,12 +44,14 @@ public class FirebaseConfig {
             FirebaseOptions options =
                     FirebaseOptions.builder()
                             .setCredentials(credentials)
+                            .setProjectId(FIREBASE_PROJECT_ID)
                             .build();
 
             FirebaseApp.initializeApp(options);
 
             System.out.println(
-                    "Firebase Admin SDK initialized successfully."
+                    "Firebase Admin SDK initialized for project: "
+                            + FIREBASE_PROJECT_ID
             );
 
         } catch (Exception e) {
@@ -58,4 +62,5 @@ public class FirebaseConfig {
         }
     }
 }
+
 
