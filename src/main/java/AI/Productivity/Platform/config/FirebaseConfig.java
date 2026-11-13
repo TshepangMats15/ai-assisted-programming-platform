@@ -13,54 +13,39 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class FirebaseConfig {
 
-    private static final String FIREBASE_PROJECT_ID = "itdma-28c29";
-
     @PostConstruct
     public void initializeFirebase() {
         if (!FirebaseApp.getApps().isEmpty()) {
             return;
         }
 
-        String serviceAccountJson =
-                System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
+        String json = System.getenv("FIREBASE_SERVICE_ACCOUNT_JSON");
 
-        if (serviceAccountJson == null ||
-                serviceAccountJson.isBlank()) {
+        if (json == null || json.isBlank()) {
             throw new IllegalStateException(
-                    "Missing FIREBASE_SERVICE_ACCOUNT_JSON environment variable."
+                "FIREBASE_SERVICE_ACCOUNT_JSON is missing"
             );
         }
 
         try {
             GoogleCredentials credentials =
-                    GoogleCredentials.fromStream(
-                            new ByteArrayInputStream(
-                                    serviceAccountJson.getBytes(
-                                            StandardCharsets.UTF_8
-                                    )
-                            )
-                    );
+                GoogleCredentials.fromStream(
+                    new ByteArrayInputStream(
+                        json.getBytes(StandardCharsets.UTF_8)
+                    )
+                );
 
-            FirebaseOptions options =
-                    FirebaseOptions.builder()
-                            .setCredentials(credentials)
-                            .setProjectId(FIREBASE_PROJECT_ID)
-                            .build();
+            FirebaseOptions options = FirebaseOptions.builder()
+                .setCredentials(credentials)
+                .setProjectId("itdma-28c29")
+                .build();
 
             FirebaseApp.initializeApp(options);
 
-            System.out.println(
-                    "Firebase Admin SDK initialized for project: "
-                            + FIREBASE_PROJECT_ID
-            );
-
         } catch (Exception e) {
             throw new IllegalStateException(
-                    "Firebase Admin SDK initialization failed.",
-                    e
+                "Firebase initialization failed", e
             );
         }
     }
 }
-
-
