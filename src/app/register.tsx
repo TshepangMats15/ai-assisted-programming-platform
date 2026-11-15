@@ -135,13 +135,15 @@ export default function RegisterScreen() {
         )}
       </TouchableOpacity>
 
-      {/* Temporary Admin Login Button */}
-      <TouchableOpacity
-        style={styles.adminButton}
-        onPress={() => router.push("../admin/adminindex" as any)}
-    >
-        <Text style={styles.adminButtonText}>Admin Login</Text>
-      </TouchableOpacity>
+      
+{/* Admin Login Button */}
+<TouchableOpacity
+  style={styles.adminButton}
+  onPress={() => router.push("/admin/login" as any)}
+>
+  <Text style={styles.adminButtonText}>Admin Login</Text>
+</TouchableOpacity>
+
 
       <TouchableOpacity onPress={() => router.push("/")}>
         <Text style={styles.loginText}>

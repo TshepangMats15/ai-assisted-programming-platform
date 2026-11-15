@@ -1,11 +1,12 @@
-// DevMate Student Course Screen
 
 import React, { useCallback, useEffect, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-
 import {
   ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -24,6 +25,22 @@ import api, {
 } from "../constants/api";
 import { useAppTheme } from "../context/ThemeContext";
 
+const PURPLE = "#8B5CF6";
+
+function extractLinks(content: string): string[] {
+  const matches = content.match(/https?:\/\/[^\s<>"']+/gi) ?? [];
+
+  return [...new Set(
+    matches.map((url) => url.replace(/[),.;!?]+$/, ""))
+  )];
+}
+
+function removeLinks(content: string): string {
+  return content
+    .replace(/https?:\/\/[^\s<>"']+/gi, "")
+    .trim();
+}
+
 export default function AssessmentsScreen() {
   const { colors, isDark } = useAppTheme();
 
@@ -32,11 +49,6 @@ export default function AssessmentsScreen() {
     courseworkId?: string;
   }>();
 
-  /*
-   * Support both names temporarily because the existing Coursework
-   * screen previously used "courseworkId", while the Learn screen
-   * is being changed to use "courseID".
-   */
   const courseID =
     typeof params.courseID === "string"
       ? params.courseID
@@ -44,58 +56,51 @@ export default function AssessmentsScreen() {
         ? params.courseworkId
         : "";
 
-  const purple = "#8B5CF6";
-  const purpleText = isDark ? "#A78BFA" : "#6D28D9";
-
   const [course, setCourse] = useState<CourseworkDTO | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedLesson, setSelectedLesson] =
+    useState<LessonDTO | null>(null);
 
-  // =======================================================
-  // LOAD SELECTED COURSE
-  // =======================================================
+  const [openedLessonIds, setOpenedLessonIds] =
+    useState<string[]>([]);
 
   const loadCourse = useCallback(async () => {
     try {
       setError(null);
 
-      if (!courseID) {
-        throw new Error(
-          "No course was selected. Please return to Learn and select a course."
-        );
+      if (!courseID.trim()) {
+        throw new Error("No course was selected.");
       }
 
       const user = auth.currentUser;
 
       if (!user) {
         throw new Error(
-          "You must be signed in to access this course."
+          "Please sign in to access your coursework."
         );
       }
 
-      /*
-       * Firebase ID token -> Authorization header.
-       * Firebase UID -> backend coursework gating.
-       */
       const token = await user.getIdToken();
-
       setAuthToken(token);
 
-      const data = await api.coursework.getById(
-        courseID,
-        user.uid
-      );
+      
+      const [courseData, lessonData] = await Promise.all([
+        api.coursework.getById(courseID),
+        api.lessons.getByCourse(courseID),
+      ]);
 
-      setCourse(data);
+      setCourse({
+        ...courseData,
+        lessons: Array.isArray(lessonData) ? lessonData : [],
+      });
+
+
     } catch (err: any) {
-      console.error("[Course] Failed to load course:", err);
-
       setCourse(null);
-
       setError(
-        err?.message ||
-          "Unable to load this course. Please try again."
+        err?.message || "Unable to load this course."
       );
     } finally {
       setLoading(false);
@@ -106,13 +111,8 @@ export default function AssessmentsScreen() {
     loadCourse();
   }, [loadCourse]);
 
-  // =======================================================
-  // REFRESH
-  // =======================================================
-
-  const handleRefresh = useCallback(async () => {
+  const refresh = useCallback(async () => {
     setRefreshing(true);
-
     try {
       await loadCourse();
     } finally {
@@ -120,23 +120,45 @@ export default function AssessmentsScreen() {
     }
   }, [loadCourse]);
 
-  // =======================================================
-  // RETRY
-  // =======================================================
+  const openLesson = (lesson: LessonDTO) => {
+    setSelectedLesson(lesson);
 
-  const handleRetry = async () => {
-    setLoading(true);
-    await loadCourse();
+    setOpenedLessonIds((previous) =>
+      previous.includes(lesson.lessonID)
+        ? previous
+        : [...previous, lesson.lessonID]
+    );
   };
 
-  // =======================================================
-  // ASSESSMENT NAVIGATION
-  // =======================================================
+  const openLink = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+
+      if (!supported) {
+        Alert.alert(
+          "Cannot Open Link",
+          "This resource URL is not supported."
+        );
+        return;
+      }
+
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        "Link Error",
+        "Unable to open this learning resource."
+      );
+    }
+  };
 
   const openAssessment = (
-    assessment: AssessmentDTO
+    assessment: AssessmentDTO | null | undefined
   ) => {
-    if (assessment.assessmentID == null) {
+    if (!assessment?.assessmentID) {
+      Alert.alert(
+        "Assessment Unavailable",
+        "This assessment has not been configured."
+      );
       return;
     }
 
@@ -144,561 +166,255 @@ export default function AssessmentsScreen() {
       pathname: "/assessment-details",
       params: {
         assessmentId: String(assessment.assessmentID),
-        assessmentTitle: assessment.title,
-        language: assessment.programLang || "",
         courseID,
+        language: assessment.programLang || "",
       },
     });
   };
 
-  // =======================================================
-  // LESSON NAVIGATION
-  // =======================================================
+  const lessons = course?.lessons ?? [];
+  const independentAssessment = course?.preAssessment;
+  const assistedAssessment = course?.postAssessment;
 
-  const openLesson = (lesson: LessonDTO) => {
-    /*
-     * We have not created/confirmed the lesson-detail route yet.
-     *
-     * Do not navigate to a fake route. For now, lessons are shown
-     * using their real backend data. The next step will connect
-     * these cards to the lesson viewer.
-     */
-    console.log(
-      `[Course] Selected lesson ${lesson.lessonID}`
+  // These values represent lesson openings in the current
+  // screen session only, not persisted completion records.
+  const lessonsOpened = lessons.filter((lesson) =>
+    openedLessonIds.includes(lesson.lessonID)
+  ).length;
+
+  const textColor = colors.text;
+  const secondary = colors.textSecondary;
+  const cardColor = colors.backgroundElement;
+  const borderColor = colors.border;
+
+  const lessonContent = selectedLesson
+    ? String(selectedLesson.contentBody ?? "")
+    : "";
+
+  const lessonLinks = extractLinks(lessonContent);
+  const lessonText = removeLinks(lessonContent);
+
+  const renderAssessment = (
+    assessment: AssessmentDTO | null | undefined,
+    title: string,
+    description: string,
+    expectedAI: boolean
+  ) => {
+    const configuredCorrectly =
+      assessment?.aiAllowed === expectedAI;
+
+    return (
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: cardColor,
+            borderColor,
+          },
+        ]}
+      >
+        <View style={styles.row}>
+          <Ionicons
+            name={
+              expectedAI
+                ? "sparkles-outline"
+                : "shield-checkmark-outline"
+            }
+            size={24}
+            color={PURPLE}
+          />
+
+          <Text style={[styles.cardTitle, { color: textColor }]}>
+            {title}
+          </Text>
+        </View>
+
+        <Text style={[styles.body, { color: secondary }]}>
+          {description}
+        </Text>
+
+        {assessment ? (
+          <>
+            <Text
+              style={[
+                styles.assessmentName,
+                { color: textColor },
+              ]}
+            >
+              {assessment.title}
+            </Text>
+
+            <Text style={[styles.meta, { color: secondary }]}>
+              AI assistance:{" "}
+              {assessment.aiAllowed ? "Allowed" : "Disabled"}
+            </Text>
+
+            {!configuredCorrectly && (
+              <Text style={styles.warning}>
+                This assessment's AI permission does not
+                match the required learning sequence.
+                An administrator must correct it.
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                !configuredCorrectly && styles.disabled,
+              ]}
+              disabled={!configuredCorrectly}
+              onPress={() => openAssessment(assessment)}
+            >
+              <Text style={styles.primaryText}>
+                Open Assessment
+              </Text>
+              <Ionicons
+                name="arrow-forward"
+                size={18}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+          </>
+        ) : (
+          <Text style={[styles.meta, { color: secondary }]}>
+            No assessment has been assigned to this stage.
+          </Text>
+        )}
+      </View>
     );
   };
-
-  // =======================================================
-  // GATING
-  // =======================================================
-
-  /*
-   * Your backend's gated coursework endpoint clears lessons and
-   * removes postAssessment when the student has not completed the
-   * pre-assessment.
-   */
-  const hasPreAssessment = Boolean(course?.preAssessment);
-
-  const lessons = course?.lessons ?? [];
-
-  const hasPostAssessment = Boolean(
-    course?.postAssessment
-  );
-
-  const contentUnlocked =
-    !hasPreAssessment ||
-    lessons.length > 0 ||
-    hasPostAssessment;
-
-  // =======================================================
-  // LOADING SCREEN
-  // =======================================================
-
-  if (loading && !refreshing) {
-    return (
-      <SafeAreaView
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
-        <View style={styles.centerState}>
-          <ActivityIndicator
-            size="large"
-            color={purple}
-          />
-
-          <Text
-            style={[
-              styles.stateTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Loading course
-          </Text>
-
-          <Text
-            style={[
-              styles.stateDescription,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            Checking your course access and learning content.
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // =======================================================
-  // ERROR SCREEN
-  // =======================================================
-
-  if (error || !course) {
-    return (
-      <SafeAreaView
-        style={[
-          styles.container,
-          {
-            backgroundColor: colors.background,
-          },
-        ]}
-      >
-        <View style={styles.errorHeader}>
-          <TouchableOpacity
-            style={[
-              styles.backButton,
-              {
-                backgroundColor: colors.backgroundElement,
-              },
-            ]}
-            onPress={() => router.back()}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={22}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.centerState}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={48}
-            color={purple}
-          />
-
-          <Text
-            style={[
-              styles.stateTitle,
-              {
-                color: colors.text,
-              },
-            ]}
-          >
-            Unable to load course
-          </Text>
-
-          <Text
-            style={[
-              styles.stateDescription,
-              {
-                color: colors.textSecondary,
-              },
-            ]}
-          >
-            {error || "Course information is unavailable."}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={handleRetry}
-          >
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-
-            <Text style={styles.retryButtonText}>
-              Try Again
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // =======================================================
-  // COURSE
-  // =======================================================
 
   return (
     <SafeAreaView
       style={[
         styles.container,
-        {
-          backgroundColor: colors.background,
-        },
+        { backgroundColor: colors.background },
       ]}
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={purple}
-            colors={[purple]}
+            onRefresh={refresh}
+            tintColor={PURPLE}
           />
         }
       >
-        {/* ================= HEADER ================= */}
-
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={[
-              styles.backButton,
-              {
-                backgroundColor: colors.backgroundElement,
-              },
-            ]}
-            onPress={() => router.back()}
-          >
-            <Ionicons
-              name="chevron-back"
-              size={22}
-              color={colors.text}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.headerContent}>
-            <Text
-              style={[
-                styles.title,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              {course.title}
-            </Text>
-
-            <Text
-              style={[
-                styles.subtitle,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              {course.module || course.courseID}
-            </Text>
-          </View>
-        </View>
-
-        {/* ================= COURSE INFORMATION ================= */}
-
-        <View
-          style={[
-            styles.courseInfoCard,
-            {
-              backgroundColor: colors.backgroundElement,
-              borderColor: colors.border,
-            },
-          ]}
+        <TouchableOpacity
+          style={styles.back}
+          onPress={() => router.back()}
         >
-          <View style={styles.courseInfoTop}>
-            <View
-              style={[
-                styles.courseIcon,
-                {
-                  backgroundColor: isDark
-                    ? "#2D2140"
-                    : "#EDE9FE",
-                },
-              ]}
-            >
-              <Ionicons
-                name="book-outline"
-                size={24}
-                color={purple}
-              />
-            </View>
+          <Ionicons
+            name="chevron-back"
+            size={22}
+            color={PURPLE}
+          />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
 
-            <View style={styles.courseInfoText}>
-              <Text
-                style={[
-                  styles.courseLabel,
-                  {
-                    color: purpleText,
-                  },
-                ]}
-              >
-                COURSE
-              </Text>
-
-              <Text
-                style={[
-                  styles.courseID,
-                  {
-                    color: colors.text,
-                  },
-                ]}
-              >
-                {course.courseID}
-              </Text>
-            </View>
-          </View>
-
-          {course.description ? (
-            <Text
-              style={[
-                styles.courseDescription,
-                {
-                  color: colors.textSecondary,
-                },
-              ]}
-            >
-              {course.description}
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator
+              size="large"
+              color={PURPLE}
+            />
+            <Text style={[styles.body, { color: secondary }]}>
+              Loading course...
             </Text>
-          ) : null}
-        </View>
+          </View>
+        ) : error || !course ? (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: cardColor, borderColor },
+            ]}
+          >
+            <Text style={[styles.cardTitle, { color: textColor }]}>
+              Unable to load course
+            </Text>
 
-        {/* ================= PRE-ASSESSMENT ================= */}
-
-        {course.preAssessment ? (
-          <>
-            <Text
-              style={[
-                styles.sectionTitle,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Pre-Assessment
+            <Text style={[styles.body, { color: secondary }]}>
+              {error || "Course unavailable."}
             </Text>
 
             <TouchableOpacity
-              style={[
-                styles.assessmentCard,
-                {
-                  backgroundColor: colors.backgroundElement,
-                  borderColor: colors.border,
-                },
-              ]}
-              activeOpacity={0.8}
-              onPress={() =>
-                openAssessment(course.preAssessment!)
-              }
+              style={styles.primaryButton}
+              onPress={() => {
+                setLoading(true);
+                loadCourse();
+              }}
             >
-              <View style={styles.cardTop}>
-                <View
-                  style={[
-                    styles.numberBox,
-                    {
-                      backgroundColor: isDark
-                        ? "#2D2140"
-                        : "#EDE9FE",
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name="clipboard-outline"
-                    size={21}
-                    color={purple}
-                  />
-                </View>
-
-                <View style={styles.assessmentInfo}>
-                  <Text
-                    style={[
-                      styles.assessmentTitle,
-                      {
-                        color: colors.text,
-                      },
-                    ]}
-                  >
-                    {course.preAssessment.title}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.assessmentType,
-                      {
-                        color: colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    Pre-Assessment
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.activeBadge,
-                    {
-                      backgroundColor: isDark
-                        ? "#2D2140"
-                        : "#EDE9FE",
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.activeText,
-                      {
-                        color: purpleText,
-                      },
-                    ]}
-                  >
-                    START
-                  </Text>
-                </View>
-              </View>
-
-              {course.preAssessment.description ? (
-                <Text
-                  style={[
-                    styles.description,
-                    {
-                      color: colors.textSecondary,
-                    },
-                  ]}
-                >
-                  {course.preAssessment.description}
-                </Text>
-              ) : null}
-
-              <View
-                style={[
-                  styles.cardFooter,
-                  {
-                    borderTopColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={styles.continueText}>
-                  Open Pre-Assessment
-                </Text>
-
-                <Ionicons
-                  name="chevron-forward"
-                  size={19}
-                  color={purple}
-                />
-              </View>
+              <Text style={styles.primaryText}>Try Again</Text>
             </TouchableOpacity>
-          </>
-        ) : null}
-
-        {/* ================= LOCKED CONTENT ================= */}
-
-        {hasPreAssessment && !contentUnlocked ? (
+          </View>
+        ) : (
           <>
-            <Text
-              style={[
-                styles.sectionTitle,
-                styles.sectionSpacing,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Lessons
+            <Text style={[styles.heading, { color: textColor }]}>
+              {course.title}
             </Text>
+
+            <Text style={[styles.subtitle, { color: secondary }]}>
+              {course.module || course.courseID}
+            </Text>
+
+            {course.description ? (
+              <Text style={[styles.body, { color: secondary }]}>
+                {course.description}
+              </Text>
+            ) : null}
 
             <View
               style={[
-                styles.lockedCard,
-                {
-                  backgroundColor: colors.backgroundElement,
-                  borderColor: colors.border,
-                },
+                styles.progressCard,
+                { backgroundColor: cardColor },
               ]}
             >
-              <View
-                style={[
-                  styles.lockIcon,
-                  {
-                    backgroundColor: isDark
-                      ? "#292929"
-                      : "#F3F4F6",
-                  },
-                ]}
-              >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={24}
-                  color={colors.textSecondary}
-                />
-              </View>
-
               <Text
-                style={[
-                  styles.lockedTitle,
-                  {
-                    color: colors.text,
-                  },
-                ]}
+                style={[styles.cardTitle, { color: textColor }]}
               >
-                Course content locked
+                Your Learning Journey
               </Text>
 
-              <Text
-                style={[
-                  styles.lockMessage,
-                  {
-                    color: colors.textSecondary,
-                  },
-                ]}
-              >
-                Complete the pre-assessment to unlock the
-                course lessons and post-assessment.
+              <Text style={[styles.body, { color: secondary }]}>
+                1. Study the mini-lessons
+                {"\n"}2. Complete the independent assessment
+                {"\n"}3. Complete the AI-assisted assessment
+              </Text>
+
+              <Text style={styles.progressText}>
+                {lessonsOpened} of {lessons.length} lessons opened
+                this session
               </Text>
             </View>
-          </>
-        ) : (
-          <>
-            {/* ================= LESSONS ================= */}
 
-            <Text
-              style={[
-                styles.sectionTitle,
-                styles.sectionSpacing,
-                {
-                  color: colors.text,
-                },
-              ]}
-            >
-              Lessons
+            <Text style={[styles.section, { color: textColor }]}>
+              Step 1 · Mini-Lessons
+            </Text>
+
+            <Text style={[styles.body, { color: secondary }]}>
+              Study the topic explanations and open the
+              recommended learning resources.
             </Text>
 
             {lessons.length === 0 ? (
               <View
                 style={[
-                  styles.emptyCard,
-                  {
-                    backgroundColor: colors.backgroundElement,
-                    borderColor: colors.border,
-                  },
+                  styles.card,
+                  { backgroundColor: cardColor, borderColor },
                 ]}
               >
-                <Ionicons
-                  name="book-outline"
-                  size={34}
-                  color={purple}
-                />
-
                 <Text
-                  style={[
-                    styles.emptyTitle,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
+                  style={[styles.cardTitle, { color: textColor }]}
                 >
                   No lessons available
                 </Text>
 
-                <Text
-                  style={[
-                    styles.emptyDescription,
-                    {
-                      color: colors.textSecondary,
-                    },
-                  ]}
-                >
-                  No lessons have been added to this course yet.
+                <Text style={[styles.body, { color: secondary }]}>
+                  The course API has not returned any lessons.
+                  They may not be configured, or the backend
+                  may still be hiding them behind the old
+                  pre-assessment requirement.
                 </Text>
               </View>
             ) : (
@@ -706,534 +422,354 @@ export default function AssessmentsScreen() {
                 <TouchableOpacity
                   key={lesson.lessonID}
                   style={[
-                    styles.lessonCard,
+                    styles.card,
                     {
-                      backgroundColor:
-                        colors.backgroundElement,
-                      borderColor: colors.border,
+                      backgroundColor: cardColor,
+                      borderColor,
                     },
                   ]}
-                  activeOpacity={0.8}
                   onPress={() => openLesson(lesson)}
                 >
-                  <View
-                    style={[
-                      styles.lessonNumber,
-                      {
-                        backgroundColor: isDark
-                          ? "#2D2140"
-                          : "#EDE9FE",
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.lessonNumberText,
-                        {
-                          color: purpleText,
-                        },
-                      ]}
-                    >
-                      {String(index + 1).padStart(2, "0")}
-                    </Text>
-                  </View>
-
-                  <View style={styles.lessonInfo}>
-                    <Text
-                      style={[
-                        styles.lessonTitle,
-                        {
-                          color: colors.text,
-                        },
-                      ]}
-                    >
-                      {lesson.title}
-                    </Text>
-
-                    <View style={styles.lessonTypeRow}>
-                      <Ionicons
-                        name={
-                          lesson.contentType === "VIDEO"
-                            ? "play-circle-outline"
-                            : lesson.contentType === "CODE_LAB"
-                              ? "code-slash-outline"
-                              : "document-text-outline"
-                        }
-                        size={14}
-                        color={colors.textSecondary}
-                      />
-
-                      <Text
-                        style={[
-                          styles.lessonType,
-                          {
-                            color: colors.textSecondary,
-                          },
-                        ]}
-                      >
-                        {lesson.contentType
-                          .replace(/_/g, " ")
-                          .toUpperCase()}
+                  <View style={styles.row}>
+                    <View style={styles.numberCircle}>
+                      <Text style={styles.numberText}>
+                        {index + 1}
                       </Text>
                     </View>
-                  </View>
 
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={purple}
-                  />
+                    <View style={styles.flex}>
+                      <Text
+                        style={[
+                          styles.cardTitle,
+                          { color: textColor },
+                        ]}
+                      >
+                        {lesson.title}
+                      </Text>
+
+                      <Text
+                        style={[styles.meta, { color: secondary }]}
+                      >
+                        {String(lesson.contentType || "LESSON")
+                          .replace(/_/g, " ")}
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name={
+                        openedLessonIds.includes(lesson.lessonID)
+                          ? "checkmark-circle-outline"
+                          : "chevron-forward"
+                      }
+                      size={22}
+                      color={PURPLE}
+                    />
+                  </View>
                 </TouchableOpacity>
               ))
             )}
 
-            {/* ================= POST-ASSESSMENT ================= */}
+            <Text style={[styles.section, { color: textColor }]}>
+              Step 2 · Independent Assessment
+            </Text>
 
-            {course.postAssessment ? (
-              <>
+            {renderAssessment(
+              independentAssessment,
+              "Work Without AI",
+              "Complete the programming assessment using your own knowledge. AI assistance must be disabled.",
+              false
+            )}
+
+            <Text style={[styles.section, { color: textColor }]}>
+              Step 3 · AI-Assisted Assessment
+            </Text>
+
+            {renderAssessment(
+              assistedAssessment,
+              "Work With AI",
+              "Complete the next assessment with AI assistance available. Your performance and AI usage can then be compared with the independent assessment.",
+              true
+            )}
+
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: cardColor, borderColor },
+              ]}
+            >
+              <View style={styles.row}>
+                <Ionicons
+                  name="analytics-outline"
+                  size={24}
+                  color={PURPLE}
+                />
                 <Text
-                  style={[
-                    styles.sectionTitle,
-                    styles.sectionSpacing,
-                    {
-                      color: colors.text,
-                    },
-                  ]}
+                  style={[styles.cardTitle, { color: textColor }]}
                 >
-                  Post-Assessment
+                  Performance Tracking
                 </Text>
+              </View>
 
-                <TouchableOpacity
-                  style={[
-                    styles.assessmentCard,
-                    {
-                      backgroundColor:
-                        colors.backgroundElement,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    openAssessment(course.postAssessment!)
-                  }
-                >
-                  <View style={styles.cardTop}>
-                    <View
-                      style={[
-                        styles.numberBox,
-                        {
-                          backgroundColor: isDark
-                            ? "#2D2140"
-                            : "#EDE9FE",
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="school-outline"
-                        size={21}
-                        color={purple}
-                      />
-                    </View>
+              <Text style={[styles.body, { color: secondary }]}>
+                Assessment scores, duration, code attempts
+                and AI interactions will form the basis of
+                the telemetry comparison.
 
-                    <View style={styles.assessmentInfo}>
-                      <Text
-                        style={[
-                          styles.assessmentTitle,
-                          {
-                            color: colors.text,
-                          },
-                        ]}
-                      >
-                        {course.postAssessment.title}
-                      </Text>
-
-                      <Text
-                        style={[
-                          styles.assessmentType,
-                          {
-                            color: colors.textSecondary,
-                          },
-                        ]}
-                      >
-                        Post-Assessment
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.activeBadge,
-                        {
-                          backgroundColor: isDark
-                            ? "#2D2140"
-                            : "#EDE9FE",
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.activeText,
-                          {
-                            color: purpleText,
-                          },
-                        ]}
-                      >
-                        START
-                      </Text>
-                    </View>
-                  </View>
-
-                  {course.postAssessment.description ? (
-                    <Text
-                      style={[
-                        styles.description,
-                        {
-                          color: colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      {course.postAssessment.description}
-                    </Text>
-                  ) : null}
-
-                  <View
-                    style={[
-                      styles.cardFooter,
-                      {
-                        borderTopColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={styles.continueText}>
-                      Open Post-Assessment
-                    </Text>
-
-                    <Ionicons
-                      name="chevron-forward"
-                      size={19}
-                      color={purple}
-                    />
-                  </View>
-                </TouchableOpacity>
-              </>
-            ) : null}
+                {"\n\n"}This screen does not yet save
+                lesson-opening or resource-opening events
+                to the backend.
+              </Text>
+            </View>
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={selectedLesson !== null}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelectedLesson(null)}
+      >
+        <SafeAreaView
+          style={[
+            styles.container,
+            { backgroundColor: colors.background },
+          ]}
+        >
+          <ScrollView contentContainerStyle={styles.content}>
+            <TouchableOpacity
+              style={styles.back}
+              onPress={() => setSelectedLesson(null)}
+            >
+              <Ionicons
+                name="close"
+                size={24}
+                color={PURPLE}
+              />
+              <Text style={styles.backText}>Close Lesson</Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.heading, { color: textColor }]}>
+              {selectedLesson?.title}
+            </Text>
+
+            <Text style={[styles.subtitle, { color: secondary }]}>
+              {String(
+                selectedLesson?.contentType || "LESSON"
+              ).replace(/_/g, " ")}
+            </Text>
+
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: cardColor, borderColor },
+              ]}
+            >
+              <Text
+                style={[styles.cardTitle, { color: textColor }]}
+              >
+                Lesson Content
+              </Text>
+
+              <Text style={[styles.lessonBody, { color: textColor }]}>
+                {lessonText ||
+                  (lessonLinks.length > 0
+                    ? "Open the learning resources below."
+                    : "No lesson content has been added yet.")}
+              </Text>
+            </View>
+
+            {lessonLinks.length > 0 && (
+              <>
+                <Text
+                  style={[styles.section, { color: textColor }]}
+                >
+                  Learning Resources
+                </Text>
+
+                {lessonLinks.map((url, index) => (
+                  <TouchableOpacity
+                    key={`${url}-${index}`}
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: cardColor,
+                        borderColor,
+                      },
+                    ]}
+                    onPress={() => openLink(url)}
+                  >
+                    <View style={styles.row}>
+                      <Ionicons
+                        name="link-outline"
+                        size={22}
+                        color={PURPLE}
+                      />
+
+                      <Text
+                        style={[
+                          styles.linkText,
+                          { color: PURPLE },
+                        ]}
+                        numberOfLines={3}
+                      >
+                        {url}
+                      </Text>
+
+                      <Ionicons
+                        name="open-outline"
+                        size={18}
+                        color={PURPLE}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => setSelectedLesson(null)}
+            >
+              <Text style={styles.primaryText}>
+                Return to Course
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
-
-// =========================================================
-// STYLES
-// =========================================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-
-  scrollContent: {
+  content: {
     padding: 20,
-    paddingBottom: 50,
+    paddingBottom: 60,
   },
-
-  // HEADER
-
-  header: {
+  back: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 15,
-    marginBottom: 25,
+    marginBottom: 24,
+    gap: 4,
   },
-
-  headerContent: {
-    flex: 1,
-  },
-
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 15,
-  },
-
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-  },
-
-  subtitle: {
-    fontSize: 13,
-    marginTop: 3,
-  },
-
-  errorHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 15,
-  },
-
-  // COURSE INFORMATION
-
-  courseInfoCard: {
-    borderWidth: 1,
-    padding: 18,
-    borderRadius: 12,
-    marginBottom: 28,
-  },
-
-  courseInfoTop: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  courseIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-
-  courseInfoText: {
-    flex: 1,
-  },
-
-  courseLabel: {
-    fontSize: 10,
-    fontWeight: "bold",
-    marginBottom: 3,
-  },
-
-  courseID: {
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-
-  courseDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 14,
-  },
-
-  // SECTIONS
-
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-  },
-
-  sectionSpacing: {
-    marginTop: 14,
-  },
-
-  // ASSESSMENTS
-
-  assessmentCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
-  },
-
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  numberBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-
-  assessmentInfo: {
-    flex: 1,
-  },
-
-  assessmentTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-
-  assessmentType: {
-    fontSize: 11,
-    marginTop: 4,
-  },
-
-  description: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 14,
-  },
-
-  activeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-
-  activeText: {
-    fontSize: 9,
-    fontWeight: "bold",
-  },
-
-  cardFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 15,
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-
-  continueText: {
-    color: "#8B5CF6",
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-
-  // LESSONS
-
-  lessonCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  lessonNumber: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-
-  lessonNumberText: {
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-
-  lessonInfo: {
-    flex: 1,
-  },
-
-  lessonTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-
-  lessonTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginTop: 5,
-  },
-
-  lessonType: {
-    fontSize: 10,
+  backText: {
+    color: PURPLE,
+    fontSize: 16,
     fontWeight: "600",
   },
-
-  // LOCKED
-
-  lockedCard: {
+  heading: {
+    fontSize: 27,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  subtitle: {
+    fontSize: 14,
+    marginBottom: 18,
+  },
+  body: {
+    fontSize: 14,
+    lineHeight: 23,
+    marginTop: 10,
+  },
+  section: {
+    fontSize: 19,
+    fontWeight: "700",
+    marginTop: 28,
+    marginBottom: 12,
+  },
+  card: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: "center",
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 12,
   },
-
-  lockIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: "center",
-    alignItems: "center",
+  progressCard: {
+    borderRadius: 14,
+    padding: 18,
+    marginTop: 14,
   },
-
-  lockedTitle: {
+  cardTitle: {
     fontSize: 16,
-    fontWeight: "bold",
-    marginTop: 13,
+    fontWeight: "700",
+    flexShrink: 1,
   },
-
-  lockMessage: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 7,
-    textAlign: "center",
-  },
-
-  // EMPTY
-
-  emptyCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 24,
-    alignItems: "center",
-  },
-
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: "bold",
-    marginTop: 11,
-  },
-
-  emptyDescription: {
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-    marginTop: 6,
-  },
-
-  // STATES
-
-  centerState: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 30,
-  },
-
-  stateTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 15,
-    textAlign: "center",
-  },
-
-  stateDescription: {
-    fontSize: 13,
-    lineHeight: 20,
-    textAlign: "center",
-    marginTop: 8,
-  },
-
-  retryButton: {
-    backgroundColor: "#8B5CF6",
-    borderRadius: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    marginTop: 18,
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
+    gap: 12,
   },
-
-  retryButtonText: {
-    color: "#FFFFFF",
+  flex: {
+    flex: 1,
+  },
+  numberCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#EDE9FE",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  numberText: {
+    color: PURPLE,
+    fontWeight: "700",
+  },
+  meta: {
     fontSize: 13,
-    fontWeight: "bold",
+    marginTop: 8,
+  },
+  assessmentName: {
+    fontSize: 16,
+    fontWeight: "600",
+    marginTop: 16,
+  },
+  warning: {
+    color: "#F59E0B",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 12,
+  },
+  primaryButton: {
+    backgroundColor: PURPLE,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginTop: 18,
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+  primaryText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  progressText: {
+    color: PURPLE,
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 14,
+  },
+  lessonBody: {
+    fontSize: 15,
+    lineHeight: 25,
+    marginTop: 14,
+  },
+  linkText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  center: {
+    paddingVertical: 70,
+    alignItems: "center",
+    gap: 16,
   },
 });

@@ -281,22 +281,31 @@ export const api = {
   // =======================================================
 
   submissions: {
-    submitCode: (
+    submitCode: async (
       data: SubmissionRequest
-    ): Promise<SubmissionResponse> => {
-      const currentUserId =
-        data.userId || auth.currentUser?.uid || "student-user";
+  ): Promise<SubmissionResponse> => {
+    const user = auth.currentUser;
 
-      return request<SubmissionResponse>("/submissions", {
-        method: "POST",
-        body: JSON.stringify({
-          assessmentId: data.assessmentId,
-          sourceCode: data.sourceCode,
-          attemptNumber: data.attemptNumber ?? 1,
-          userId: currentUserId,
-        }),
-      });
-    },
+    if (!user) {
+      throw new Error(
+        "You must be signed in before submitting code."
+      );
+    }
+
+    const token = await user.getIdToken();
+    setAuthToken(token);
+
+    return request<SubmissionResponse>("/submissions", {
+      method: "POST",
+      body: JSON.stringify({
+        assessmentId: data.assessmentId,
+        sourceCode: data.sourceCode,
+        attemptNumber: data.attemptNumber ?? 1,
+        userId: user.uid,
+      }),
+    });
+  },
+
 
     getAll: (): Promise<SubmissionRecord[]> =>
       request<SubmissionRecord[]>("/submissions", {
@@ -656,6 +665,11 @@ export const api = {
   users: {
     getAll: (): Promise<any[]> =>
       request<any[]>("/users", {
+        method: "GET",
+      }),
+
+    getFirebaseStudents: (): Promise<any[]> =>
+      request<any[]>("/admin/students", {
         method: "GET",
       }),
 

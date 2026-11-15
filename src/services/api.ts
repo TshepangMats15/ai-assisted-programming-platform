@@ -11,6 +11,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { auth } from "../services/firebase";
 
 export const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL ||
@@ -205,9 +206,53 @@ export async function request<T>(
     ...(options.headers as Record<string, string>),
   };
 
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
+
+
+
+const firebaseUser = auth.currentUser;
+
+if (endpoint === "/admin/students") {
+  if (!firebaseUser) {
+    throw new Error("Please sign in before accessing admin students.");
   }
+
+  const token = await firebaseUser.getIdToken(true);
+
+  headers["Authorization"] = `Bearer ${token}`;
+} else if (firebaseUser) {
+  const token = await firebaseUser.getIdToken();
+  headers["Authorization"] = `Bearer ${token}`;
+} else if (authToken) {
+  headers["Authorization"] = `Bearer ${authToken}`;
+}
+
+
+if (firebaseUser) {
+  try {
+    const firebaseIdToken = await firebaseUser.getIdToken();
+
+    headers["Authorization"] = `Bearer ${firebaseIdToken}`;
+  } catch (error) {
+    console.error("[api] Failed to obtain Firebase ID token:", error);
+    throw new Error("Could not authenticate with Firebase. Please sign in again.");
+  }
+} else if (endpoint === "/admin/students") {
+  throw new Error(
+    "No Firebase user is signed in. Please sign in as an admin."
+  );
+} else if (authToken) {
+  // Preserve the existing behavior for other API endpoints.
+  headers["Authorization"] = `Bearer ${authToken}`;
+}
+
+
+if (__DEV__ && endpoint === "/admin/students") {
+  console.log("[Firebase diagnostics]", {
+    currentUserExists: !!auth.currentUser,
+    firebaseUid: auth.currentUser?.uid ?? null,
+    authorizationHeaderPresent: !!headers["Authorization"],
+  });
+}
 
   const controller = new AbortController();
 
@@ -664,6 +709,11 @@ export const api = {
         `/analytics/student/${encodeURIComponent(userId)}`,
         { method: "GET" }
       ),
+
+    getReports: (): Promise<AnalyticsSummary> =>
+      request<AnalyticsSummary>("/analytics/reports", {
+      method: "GET",
+}   ),
   },
 
   // ================= USERS =================
@@ -679,6 +729,11 @@ export const api = {
         `/users/${encodeURIComponent(id)}`,
         { method: "GET" }
       ),
+
+    getFirebaseStudents: (): Promise<any[]> =>
+      request<any[]>("/admin/students", {
+        method: "GET",
+      }),
 
     create: (data: UserDTO): Promise<UserDTO> =>
       request<UserDTO>("/users", {

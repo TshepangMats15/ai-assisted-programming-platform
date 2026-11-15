@@ -45,7 +45,7 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="home-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}
@@ -60,27 +60,13 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="book-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}
       />
 
-      {/* ANALYTICS */}
-      <Tabs.Screen
-        name="analys"
-        options={{
-          title: "Analytics",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="stats-chart-outline"
-              size={size}
-              color={color}
-            />
-          ),
-        }}
-      />
-
+      
       {/* SETTINGS */}
       <Tabs.Screen
         name="settings"
@@ -90,7 +76,7 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="settings-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}
@@ -105,7 +91,7 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="person-circle-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}

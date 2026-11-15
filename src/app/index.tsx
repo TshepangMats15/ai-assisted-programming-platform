@@ -26,54 +26,87 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    const cleanEmail = email.trim();
+  
+const handleLogin = async () => {
+  const cleanEmail = email.trim();
 
-    if (!cleanEmail || !password) {
-      Alert.alert("Missing Information", "Please enter your email and password.");
-      return;
-    }
+  if (!cleanEmail || !password) {
+    Alert.alert(
+      "Missing Information",
+      "Please enter your email and password."
+    );
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        cleanEmail,
-        password
-      );
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      cleanEmail,
+      password
+    );
 
-      // Acquire and sync the Firebase Auth Token with backend API clients
-      const token = await userCredential.user.getIdToken();
-      setAuthToken(token);
-      setServicesAuthToken(token);
+    // Force Firebase to issue a fresh ID token.
+    const token = await userCredential.user.getIdToken(true);
 
-      // Route admin users to the Admin Portal, students to Student Dashboard
-      if (cleanEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    // Update both API clients.
+    setAuthToken(token);
+    setServicesAuthToken(token);
+
+    const isAdmin =
+      userCredential.user.email?.toLowerCase() ===
+      ADMIN_EMAIL.toLowerCase();
+
+    if (isAdmin) {
+      console.log("[Admin Login] Firebase user:", {
+        uid: userCredential.user.uid,
+        emailVerified: userCredential.user.emailVerified,
+        tokenPresent: !!token,
+      });
+
+      // The backend must verify admin authorization.
+      try {
+        const { api } = await import("../services/api");
+        await api.users.getFirebaseStudents();
+
         router.replace("/admin/adminindex");
-      } else {
-        router.replace("/(student)/dashboard");
-      }
-    } catch (error: any) {
-      let message = "Unable to sign in. Please try again.";
+      } catch (adminError: any) {
+        console.error(
+          "[Admin Login] Backend admin verification failed:",
+          adminError
+        );
 
-      if (error.code === "auth/invalid-email") {
-        message = "Please enter a valid email address.";
-      } else if (
-        error.code === "auth/invalid-credential" ||
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/user-not-found"
-      ) {
-        message = "Incorrect email or password.";
-      } else if (error.code === "auth/too-many-requests") {
-        message = "Too many attempts. Please try again later.";
+        Alert.alert(
+          "Admin Verification Failed",
+          adminError?.message ||
+            "The backend could not verify your admin account."
+        );
       }
-
-      Alert.alert("Login Failed", message);
-    } finally {
-      setLoading(false);
+    } else {
+      router.replace("/(student)/dashboard");
     }
-  };
+  } catch (error: any) {
+    let message = "Unable to sign in. Please try again.";
+
+    if (error.code === "auth/invalid-email") {
+      message = "Please enter a valid email address.";
+    } else if (
+      error.code === "auth/invalid-credential" ||
+      error.code === "auth/wrong-password" ||
+      error.code === "auth/user-not-found"
+    ) {
+      message = "Incorrect email or password.";
+    } else if (error.code === "auth/too-many-requests") {
+      message = "Too many attempts. Please try again later.";
+    }
+
+    Alert.alert("Login Failed", message);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <KeyboardAvoidingView

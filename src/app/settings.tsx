@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import {
   SafeAreaView,
@@ -19,6 +20,11 @@ export default function SettingsScreen() {
 
   const [remindersEnabled, setRemindersEnabled] =
     useState(true);
+
+  // Added: policy and About Us expansion states
+  const [privacyExpanded, setPrivacyExpanded] = useState(false);
+  const [securityExpanded, setSecurityExpanded] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
 
   // Send password reset email
   const handlePasswordReset = async () => {
@@ -135,6 +141,204 @@ export default function SettingsScreen() {
           </Text>
           <Text style={styles.arrow}>›</Text>
         </TouchableOpacity>
+
+        {/* PRIVACY POLICY - ADDED */}
+
+        <Text style={styles.sectionTitle}>
+          Privacy Policy
+        </Text>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => setPrivacyExpanded(!privacyExpanded)}
+        >
+          <Text style={styles.actionText}>
+            View Privacy Policy
+          </Text>
+          <Text style={styles.arrow}>
+            {privacyExpanded ? "⌄" : "›"}
+          </Text>
+        </TouchableOpacity>
+
+        {privacyExpanded && (
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutTitle}>
+              DevMate Privacy Policy
+            </Text>
+
+            <Text style={styles.versionText}>
+              Effective Date: 12 November 2026
+            </Text>
+
+            <Text style={styles.aboutText}>
+              {"\n"}1. Introduction{"\n"}
+              DevMate is an AI-assisted programming learning
+              platform. This policy explains how information
+              is collected, used and handled when users
+              access the platform.
+              {"\n\n"}2. Information We Collect{"\n"}
+              Depending on the features used, DevMate may
+              process names, email addresses, user roles,
+              coursework, assessments, submissions,
+              learning progress, AI prompts and usage data.
+              {"\n\n"}3. How We Use Information{"\n"}
+              Information is used to provide learning
+              features, authenticate users, manage accounts,
+              support AI functionality, display analytics
+              and maintain the platform.
+              {"\n\n"}4. Third-Party Services{"\n"}
+              DevMate uses Firebase Authentication and
+              cloud-hosted backend services. AI prompts may
+              be transmitted to an AI service to generate
+              responses.
+              {"\n\n"}5. Data Protection{"\n"}
+              DevMate aims to protect user information
+              through appropriate authentication,
+              access controls and secure communication.
+              No online service can guarantee absolute
+              security.
+              {"\n\n"}6. Data Retention{"\n"}
+              Information may be retained as necessary
+              to provide services and meet applicable
+              operational or legal requirements.
+              Specific retention and deletion procedures
+              will be communicated when established.
+              {"\n\n"}7. User Rights{"\n"}
+              Subject to applicable law, users may request
+              access to, correction of, or deletion of
+              their personal information.
+              {"\n\n"}8. Policy Updates{"\n"}
+              DevMate may update this policy as its
+              features or data practices change.
+            </Text>
+          </View>
+        )}
+
+        {/* SECURITY POLICY - ADDED */}
+
+        <Text style={styles.sectionTitle}>
+          Security Policy
+        </Text>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => setSecurityExpanded(!securityExpanded)}
+        >
+          <Text style={styles.actionText}>
+            View Security Policy
+          </Text>
+          <Text style={styles.arrow}>
+            {securityExpanded ? "⌄" : "›"}
+          </Text>
+        </TouchableOpacity>
+
+        {securityExpanded && (
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutTitle}>
+              DevMate Security Policy
+            </Text>
+
+            <Text style={styles.versionText}>
+              Effective Date: 12 November 2026
+            </Text>
+
+            <Text style={styles.aboutText}>
+              {"\n"}1. Security Commitment{"\n"}
+              DevMate aims to protect user accounts,
+              academic information and platform resources.
+              {"\n\n"}2. Authentication{"\n"}
+              DevMate uses Firebase Authentication to
+              support user sign-in and account management.
+              {"\n\n"}3. Access Control{"\n"}
+              DevMate supports different user roles,
+              including students and administrators.
+              Sensitive operations should be restricted
+              through verified backend permissions.
+              {"\n\n"}4. Data Protection{"\n"}
+              DevMate aims to use secure communication,
+              appropriate access controls and protected
+              management of service credentials.
+              {"\n\n"}5. AI Safety{"\n"}
+              Users should not enter passwords, private
+              API keys or other confidential information
+              into AI prompts. AI-generated code should
+              be reviewed before use.
+              {"\n\n"}6. User Responsibilities{"\n"}
+              Users should protect their credentials,
+              avoid sharing access tokens and report
+              suspicious account activity.
+              {"\n\n"}7. Security Reporting{"\n"}
+              Suspected security vulnerabilities should
+              be reported responsibly to the DevMate
+              project team.
+              {"\n\n"}8. Security Updates{"\n"}
+              DevMate may update this policy as new
+              security measures and platform features
+              are introduced.
+            </Text>
+          </View>
+        )}
+
+        {/* ABOUT US - ADDED */}
+
+        <Text style={styles.sectionTitle}>
+          About Us
+        </Text>
+
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => setAboutExpanded(!aboutExpanded)}
+        >
+          <Text style={styles.actionText}>
+            Learn More About DevMate
+          </Text>
+          <Text style={styles.arrow}>
+            {aboutExpanded ? "⌄" : "›"}
+          </Text>
+        </TouchableOpacity>
+
+        {aboutExpanded && (
+          <View style={styles.aboutCard}>
+            <Text style={styles.aboutTitle}>
+              About DevMate
+            </Text>
+
+            <Text style={styles.versionText}>
+              Updated: 12 November 2026
+            </Text>
+
+            <Text style={styles.aboutText}>
+              {"\n"}DevMate is an AI-assisted programming
+              and academic productivity platform designed
+              to support students in learning and improving
+              their programming skills.
+              {"\n\n"}Our Mission{"\n"}
+              To make programming education more accessible,
+              structured and engaging through practical
+              learning tools and responsible AI assistance.
+              {"\n\n"}Our Vision{"\n"}
+              To help students become confident,
+              independent problem-solvers and capable
+              software developers.
+              {"\n\n"}Our Features{"\n"}
+              • AI-assisted programming support{"\n"}
+              • Coursework management{"\n"}
+              • Assessments and submissions{"\n"}
+              • Learning progress and analytics{"\n"}
+              • Administrative learning tools
+              {"\n\n"}Our Technology{"\n"}
+              DevMate uses Expo and React Native for
+              the frontend, Java Spring Boot for the
+              backend, Firebase Authentication and
+              cloud-hosted services.
+              {"\n\n"}Our Commitment{"\n"}
+              We aim to provide a student-focused
+              learning environment that encourages
+              academic growth and practical programming
+              skills.
+            </Text>
+          </View>
+        )}
 
         {/* APPLICATION INFORMATION */}
 
