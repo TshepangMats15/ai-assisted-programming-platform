@@ -12,6 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/submissions")
+
 public class SubmissionController {
 
     private final SubmissionService submissionService;
@@ -44,7 +45,7 @@ public class SubmissionController {
 
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<Submission>> getUserSubmissions(@PathVariable String userId) {
-        return ResponseEntity.ok(submissionRepository.findByuserId(userId));
+        return ResponseEntity.ok(submissionRepository.findByUserId(userId));
     }
 
     @GetMapping("/{submissionId}")

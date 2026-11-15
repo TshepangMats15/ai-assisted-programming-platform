@@ -1,15 +1,18 @@
+
 package com.devmate.Entities;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import org.hibernate.annotations.Audited;
 
+import java.util.List;
 
 @Entity
-@Audited.Table(name = "Assessment")
+@Table(name = "assessment")
 public class Assessment {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "assessmentID")
+    @Column(name = "assessmentid")
     private Integer assessmentID;
 
     @Column(name = "title", nullable = false)
@@ -21,25 +24,46 @@ public class Assessment {
     @Column(name = "difficulty")
     private String difficulty;
 
-    @Column(name = "programLang")
+    @Column(name = "program_lang")
     private String programLang;
 
-    @Column(name = "timeLimit")
+    @Column(name = "time_limit")
     private Integer timeLimit;
+
+    @Column(name = "assessment_type", nullable = false)
+    private String assessmentType;
+
+    @Column(name = "ai_allowed", nullable = false)
+    private Boolean aiAllowed = false;
+
+    @JsonIgnore
+    @OneToMany(
+            mappedBy = "assessment",
+            cascade = CascadeType.ALL,
+            fetch = FetchType.LAZY
+    )
+    private List<Question> questions;
 
     public Assessment() {
     }
 
-    public Assessment(String title, String description,
-                      String difficulty, String programLang,
-                      Integer timeLimit) {
+    public Assessment(
+            String title,
+            String description,
+            String difficulty,
+            String programLang,
+            Integer timeLimit,
+            String assessmentType,
+            Boolean aiAllowed
+    ) {
         this.title = title;
         this.description = description;
         this.difficulty = difficulty;
         this.programLang = programLang;
         this.timeLimit = timeLimit;
+        this.assessmentType = assessmentType;
+        this.aiAllowed = aiAllowed;
     }
-
 
     public Integer getAssessmentID() {
         return assessmentID;
@@ -88,7 +112,28 @@ public class Assessment {
     public void setTimeLimit(Integer timeLimit) {
         this.timeLimit = timeLimit;
     }
+
+    public String getAssessmentType() {
+        return assessmentType;
+    }
+
+    public void setAssessmentType(String assessmentType) {
+        this.assessmentType = assessmentType;
+    }
+
+    public Boolean getAiAllowed() {
+        return aiAllowed;
+    }
+
+    public void setAiAllowed(Boolean aiAllowed) {
+        this.aiAllowed = aiAllowed;
+    }
+
+    public List<Question> getQuestions() {
+        return questions;
+    }
+
+    public void setQuestions(List<Question> questions) {
+        this.questions = questions;
+    }
 }
-
-
-

@@ -1,7 +1,7 @@
 package com.devmate.Entities;
 
-import jakarta.persistence.*;
 
+import jakarta.persistence.*;
 import jakarta.persistence.Column;
 import java.time.LocalDateTime;
 

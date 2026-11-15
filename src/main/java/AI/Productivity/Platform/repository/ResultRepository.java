@@ -13,4 +13,7 @@ public interface ResultRepository extends JpaRepository<Result, Long> {
 
     // Find results belonging to a specific assessment
     List<Result> findByAssessmentId(Integer assessmentId);
+
+    // Check if a specific user completed a specific assessment
+    boolean existsByUserIdAndAssessmentId(String userId, Integer assessmentId);
 }

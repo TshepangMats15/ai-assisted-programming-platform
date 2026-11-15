@@ -15,6 +15,16 @@ import java.util.UUID;
 public class Users {
 
     @Id
+    @Column(name = "firebase_uid", unique = true, length = 128)
+    private String firebaseUid;
+
+    public String getFirebaseUid() {
+    return firebaseUid;
+}
+
+public void setFirebaseUid(String firebaseUid) {
+    this.firebaseUid = firebaseUid;
+}
     @Column(name = "UserID", nullable = false, unique = true)
     private String id;
 
@@ -26,7 +36,7 @@ public class Users {
 
     // Accepted in requests, never sent back in responses
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    @Column(name = "password", nullable = false)
+    @Column(name = "password", nullable = true)
     private String password;
 
     @Column(name = "role", nullable = false)
