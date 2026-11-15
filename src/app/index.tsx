@@ -15,6 +15,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebase";
+import { setAuthToken } from "../constants/api";
+import { setAuthToken as setServicesAuthToken } from "../services/api";
+
+const ADMIN_EMAIL = "tshepangmatsane15@gmail.com";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -22,37 +26,87 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email.trim() || !password) {
-      Alert.alert("Missing Information", "Please enter your email and password.");
-      return;
-    }
+  
+const handleLogin = async () => {
+  const cleanEmail = email.trim();
 
-    setLoading(true);
+  if (!cleanEmail || !password) {
+    Alert.alert(
+      "Missing Information",
+      "Please enter your email and password."
+    );
+    return;
+  }
 
-    try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.replace("/(student)/dashboard");
-    } catch (error: any) {
-      let message = "Unable to sign in. Please try again.";
+  setLoading(true);
 
-      if (error.code === "auth/invalid-email") {
-        message = "Please enter a valid email address.";
-      } else if (
-        error.code === "auth/invalid-credential" ||
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/user-not-found"
-      ) {
-        message = "Incorrect email or password.";
-      } else if (error.code === "auth/too-many-requests") {
-        message = "Too many attempts. Please try again later.";
+  try {
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      cleanEmail,
+      password
+    );
+
+    // Force Firebase to issue a fresh ID token.
+    const token = await userCredential.user.getIdToken(true);
+
+    // Update both API clients.
+    setAuthToken(token);
+    setServicesAuthToken(token);
+
+    const isAdmin =
+      userCredential.user.email?.toLowerCase() ===
+      ADMIN_EMAIL.toLowerCase();
+
+    if (isAdmin) {
+      console.log("[Admin Login] Firebase user:", {
+        uid: userCredential.user.uid,
+        emailVerified: userCredential.user.emailVerified,
+        tokenPresent: !!token,
+      });
+
+      // The backend must verify admin authorization.
+      try {
+        const { api } = await import("../services/api");
+        await api.users.getFirebaseStudents();
+
+        router.replace("/admin/adminindex");
+      } catch (adminError: any) {
+        console.error(
+          "[Admin Login] Backend admin verification failed:",
+          adminError
+        );
+
+        Alert.alert(
+          "Admin Verification Failed",
+          adminError?.message ||
+            "The backend could not verify your admin account."
+        );
       }
-
-      Alert.alert("Login Failed", message);
-    } finally {
-      setLoading(false);
+    } else {
+      router.replace("/(student)/dashboard");
     }
-  };
+  } catch (error: any) {
+    let message = "Unable to sign in. Please try again.";
+
+    if (error.code === "auth/invalid-email") {
+      message = "Please enter a valid email address.";
+    } else if (
+      error.code === "auth/invalid-credential" ||
+      error.code === "auth/wrong-password" ||
+      error.code === "auth/user-not-found"
+    ) {
+      message = "Incorrect email or password.";
+    } else if (error.code === "auth/too-many-requests") {
+      message = "Too many attempts. Please try again later.";
+    }
+
+    Alert.alert("Login Failed", message);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <KeyboardAvoidingView

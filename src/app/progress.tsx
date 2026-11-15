@@ -1,6 +1,7 @@
-
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,17 +11,111 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
-// Temporary progress data
-const courses = [
-  { name: "Python Programming", progress: 70 },
-  { name: "Introduction to Web Design", progress: 45 },
-  { name: "Intermediate Programming", progress: 20 },
-];
+import { auth } from "../services/firebase";
+import api, { CourseworkDTO, ResultRecord } from "../constants/api";
+
+type CourseProgress = {
+  courseID: string;
+  name: string;
+  progress: number;
+};
 
 export default function ProgressScreen() {
+  const [courses, setCourses] = useState<CourseProgress[]>([]);
+  const [totalCompletedTasks, setTotalCompletedTasks] = useState(0);
+  const [overallProgress, setOverallProgress] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadProgressData = useCallback(async () => {
+    try {
+      const currentUid = auth.currentUser?.uid;
+
+      // 1. Fetch real coursework created by the admin and the student's results
+      const [allCoursework, userResults] = await Promise.all([
+        api.coursework.getAll().catch(() => [] as CourseworkDTO[]),
+        currentUid
+          ? api.results.getUserResults(currentUid).catch(() => [] as ResultRecord[])
+          : Promise.resolve([] as ResultRecord[]),
+      ]);
+
+      const completedAssessmentIds = new Set(
+        userResults
+          .map((r) => r.assessmentId)
+          .filter((id): id is number => id != null)
+      );
+
+      // 2. Calculate progress for each admin-created course
+      const calculatedCourses: CourseProgress[] = allCoursework.map((course) => {
+        let totalAssessments = 0;
+        let completedAssessments = 0;
+
+        if (course.preAssessment?.assessmentID) {
+          totalAssessments += 1;
+          if (completedAssessmentIds.has(course.preAssessment.assessmentID)) {
+            completedAssessments += 1;
+          }
+        }
+
+        if (course.postAssessment?.assessmentID) {
+          totalAssessments += 1;
+          if (completedAssessmentIds.has(course.postAssessment.assessmentID)) {
+            completedAssessments += 1;
+          }
+        }
+
+        const percentage =
+          totalAssessments > 0
+            ? Math.round((completedAssessments / totalAssessments) * 100)
+            : 0;
+
+        return {
+          courseID: course.courseID,
+          name: course.title || "Untitled Course",
+          progress: percentage,
+        };
+      });
+
+      setCourses(calculatedCourses);
+      setTotalCompletedTasks(userResults.length);
+
+      if (calculatedCourses.length > 0) {
+        const sum = calculatedCourses.reduce((acc, curr) => acc + curr.progress, 0);
+        setOverallProgress(Math.round(sum / calculatedCourses.length));
+      } else {
+        setOverallProgress(0);
+      }
+    } catch (err) {
+      console.warn("[Progress] Failed to load progress data:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProgressData();
+  }, [loadProgressData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadProgressData();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#8B5CF6"
+            colors={["#8B5CF6"]}
+          />
+        }
+      >
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
@@ -36,17 +131,23 @@ export default function ProgressScreen() {
 
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>3</Text>
+            <Text style={styles.statNumber}>
+              {loading && !refreshing ? "..." : courses.length}
+            </Text>
             <Text style={styles.statLabel}>Courses</Text>
           </View>
 
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>5</Text>
+            <Text style={styles.statNumber}>
+              {loading && !refreshing ? "..." : totalCompletedTasks}
+            </Text>
             <Text style={styles.statLabel}>Tasks Done</Text>
           </View>
 
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>45%</Text>
+            <Text style={styles.statNumber}>
+              {loading && !refreshing ? "..." : `${overallProgress}%`}
+            </Text>
             <Text style={styles.statLabel}>Overall</Text>
           </View>
         </View>
@@ -55,27 +156,37 @@ export default function ProgressScreen() {
 
         <Text style={styles.sectionTitle}>Course Progress</Text>
 
-        {courses.map((course) => (
-          <View key={course.name} style={styles.courseCard}>
-            <View style={styles.courseHeader}>
-              <Text style={styles.courseName}>
-                {course.name}
-              </Text>
-              <Text style={styles.percentage}>
-                {course.progress}%
-              </Text>
-            </View>
-
-            <View style={styles.progressBackground}>
-              <View
-                style={[
-                  styles.progressBar,
-                  { width: `${course.progress}%` },
-                ]}
-              />
-            </View>
+        {loading && !refreshing ? (
+          <ActivityIndicator
+            size="large"
+            color="#8B5CF6"
+            style={{ marginVertical: 20 }}
+          />
+        ) : courses.length === 0 ? (
+          <View style={styles.courseCard}>
+            <Text style={[styles.courseName, { color: "#A3A3A3" }]}>
+              No courses created yet by admin.
+            </Text>
           </View>
-        ))}
+        ) : (
+          courses.map((course) => (
+            <View key={course.courseID} style={styles.courseCard}>
+              <View style={styles.courseHeader}>
+                <Text style={styles.courseName}>{course.name}</Text>
+                <Text style={styles.percentage}>{course.progress}%</Text>
+              </View>
+
+              <View style={styles.progressBackground}>
+                <View
+                  style={[
+                    styles.progressBar,
+                    { width: `${course.progress}%` },
+                  ]}
+                />
+              </View>
+            </View>
+          ))
+        )}
 
         {/* ================= ACHIEVEMENTS ================= */}
 
@@ -84,11 +195,11 @@ export default function ProgressScreen() {
         <View style={styles.achievementCard}>
           <Text style={styles.achievementIcon}>★</Text>
           <View style={styles.achievementInfo}>
-            <Text style={styles.achievementTitle}>
-              Getting Started
-            </Text>
+            <Text style={styles.achievementTitle}>Getting Started</Text>
             <Text style={styles.achievementDescription}>
-              Started your programming learning journey.
+              {courses.length > 0
+                ? "Enrolled in active platform coursework."
+                : "Awaiting course enrollment."}
             </Text>
           </View>
         </View>
@@ -96,18 +207,17 @@ export default function ProgressScreen() {
         <View style={styles.achievementCard}>
           <Text style={styles.achievementIcon}>★</Text>
           <View style={styles.achievementInfo}>
-            <Text style={styles.achievementTitle}>
-              Python Explorer
-            </Text>
+            <Text style={styles.achievementTitle}>Assessment Master</Text>
             <Text style={styles.achievementDescription}>
-              Made progress in Python Programming.
+              {totalCompletedTasks > 0
+                ? `Completed ${totalCompletedTasks} assessment exercise${totalCompletedTasks === 1 ? "" : "s"}.`
+                : "Complete your first assessment to unlock this badge."}
             </Text>
           </View>
         </View>
 
         <Text style={styles.demoText}>
-          Progress information is sample data until connected to
-          the backend.
+          Pull down to refresh live progress metrics.
         </Text>
       </ScrollView>
     </SafeAreaView>

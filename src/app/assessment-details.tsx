@@ -1,319 +1,1192 @@
+// DevMate Student Assessment Details Screen
 
-import { router, useLocalSearchParams } from "expo-router";
+import React, {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
-  Alert,
+  router,
+  useLocalSearchParams,
+} from "expo-router";
+
+import { Ionicons } from "@expo/vector-icons";
+
+import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
+  Alert,
 } from "react-native";
 
+import api, {
+  AssessmentDTO,
+  QuestionDTO,
+} from "../constants/api";
+
+import { useAppTheme } from "../context/ThemeContext";
+
 export default function AssessmentDetailsScreen() {
-  // Get the assessment selected on the Coursework screen
-  const { assessmentId, assessmentTitle, language } =
+  const { colors, isDark } = useAppTheme();
+
+  const { assessmentId, courseID } =
     useLocalSearchParams<{
       assessmentId?: string;
       assessmentTitle?: string;
       language?: string;
+      courseID?: string;
     }>();
 
-  const selectedLanguage = language || "Python";
-  const selectedTitle = assessmentTitle || "Programming Assessment";
+  const purple = "#8B5CF6";
 
-  // Check that the assessment ID is valid
+  const purpleText = isDark
+    ? "#A78BFA"
+    : "#6D28D9";
+
+  // =======================================================
+  // STATE
+  // =======================================================
+
+  const [assessment, setAssessment] =
+    useState<AssessmentDTO | null>(null);
+
+  const [questions, setQuestions] =
+    useState<QuestionDTO[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+  // =======================================================
+  // ASSESSMENT ID
+  // =======================================================
+
+  const parsedAssessmentId =
+    typeof assessmentId === "string"
+      ? Number(assessmentId)
+      : NaN;
+
   const validAssessmentId =
-    typeof assessmentId === "string" &&
-    Number.isSafeInteger(Number(assessmentId)) &&
-    Number(assessmentId) > 0;
+    Number.isSafeInteger(parsedAssessmentId) &&
+    parsedAssessmentId > 0;
 
-  // Identify which assessment is being displayed
-  const isConditionalStatements =
-    selectedTitle === "Conditional Statements";
+  // =======================================================
+  // LOAD ASSESSMENT
+  // =======================================================
 
-  const isLoops = selectedTitle === "Loops";
+  const loadAssessment =
+    useCallback(async () => {
+      try {
+        setError(null);
 
-  // Open the Coding Workspace
-  function openCodingWorkspace() {
-    if (!validAssessmentId) {
-      Alert.alert(
-        "Assessment Not Selected",
-        "Please select an assessment from the Coursework screen."
-      );
-      return;
-    }
+        if (!validAssessmentId) {
+          throw new Error(
+            "No valid assessment was selected. Please return to the course and select an assessment."
+          );
+        }
 
-    router.push({
-      pathname: "/coding-workspace",
-      params: {
-        assessmentId: assessmentId,
-        assessmentTitle: selectedTitle,
-        language: selectedLanguage,
-      },
-    });
+        /*
+         * Load the assessment and all of its
+         * questions from Spring Boot.
+         */
+        const [
+          assessmentData,
+          questionData,
+        ] = await Promise.all([
+          api.assessments.getById(
+            parsedAssessmentId
+          ),
+
+          api.assessments.getQuestions(
+            parsedAssessmentId
+          ),
+        ]);
+
+        setAssessment(assessmentData);
+
+        setQuestions(
+          Array.isArray(questionData)
+            ? questionData
+            : []
+        );
+      } catch (err: any) {
+        console.error(
+          "[Assessment Details] Failed to load assessment:",
+          err
+        );
+
+        setAssessment(null);
+        setQuestions([]);
+
+        setError(
+          err?.message ||
+            "Unable to load this assessment. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      parsedAssessmentId,
+      validAssessmentId,
+    ]);
+
+  useEffect(() => {
+    loadAssessment();
+  }, [loadAssessment]);
+
+  // =======================================================
+  // REFRESH
+  // =======================================================
+
+  const handleRefresh =
+    useCallback(async () => {
+      setRefreshing(true);
+
+      try {
+        await loadAssessment();
+      } finally {
+        setRefreshing(false);
+      }
+    }, [loadAssessment]);
+
+  // =======================================================
+  // RETRY
+  // =======================================================
+
+  const handleRetry = async () => {
+    setLoading(true);
+
+    await loadAssessment();
+  };
+
+  // =======================================================
+  // OPEN CODING QUESTION
+  // =======================================================
+
+  
+const openCodingQuestion = (
+  question: QuestionDTO
+) => {
+  // The route assessmentId is already validated
+  // when this screen loads.
+  if (!validAssessmentId || !assessment) {
+    Alert.alert(
+      "Assessment Unavailable",
+      "Please reload the assessment and try again."
+    );
+    return;
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+  if (
+    question.questionType?.toUpperCase() !==
+    "CODING_CHALLENGE"
+  ) {
+    Alert.alert(
+      "Invalid Question",
+      "This question is not a coding challenge."
+    );
+    return;
+  }
+
+  if (
+    !question.questionID ||
+    !question.questionID.trim()
+  ) {
+    Alert.alert(
+      "Question Unavailable",
+      "This coding challenge does not have a valid question ID."
+    );
+    return;
+  }
+
+  // Prefer the backend assessment ID, but fall
+  // back to the valid ID used to load this screen.
+  const idToOpen =
+    assessment.assessmentID != null &&
+    Number.isSafeInteger(
+      Number(assessment.assessmentID)
+    ) &&
+    Number(assessment.assessmentID) > 0
+      ? Number(assessment.assessmentID)
+      : parsedAssessmentId;
+
+  router.push({
+    pathname: "/coding-workspace",
+    params: {
+      assessmentId: String(idToOpen),
+      questionID: question.questionID,
+      language: assessment.programLang || "",
+      courseID:
+        typeof courseID === "string"
+          ? courseID
+          : "",
+    },
+  });
+};
+
+  // =======================================================
+  // HELPERS
+  // =======================================================
+
+  const formatAssessmentType = (
+    type?: string
+  ): string => {
+    if (!type) {
+      return "Assessment";
+    }
+
+    switch (type.toUpperCase()) {
+      case "PRE_TEST":
+        return "Pre-Assessment";
+
+      case "POST_TEST":
+        return "Post-Assessment";
+
+      default:
+        return type
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(
+            /\b\w/g,
+            (letter) =>
+              letter.toUpperCase()
+          );
+    }
+  };
+
+  const formatQuestionType = (
+    type?: string
+  ): string => {
+    if (!type) {
+      return "Question";
+    }
+
+    switch (type.toUpperCase()) {
+      case "MULTIPLE_CHOICE":
+        return "Multiple Choice";
+
+      case "CODING_CHALLENGE":
+        return "Coding Challenge";
+
+      default:
+        return type
+          .replace(/_/g, " ")
+          .toLowerCase()
+          .replace(
+            /\b\w/g,
+            (letter) =>
+              letter.toUpperCase()
+          );
+    }
+  };
+
+  // =======================================================
+  // LOADING
+  // =======================================================
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          {
+            backgroundColor:
+              colors.background,
+          },
+        ]}
       >
-        {/* HEADER */}
+        <View
+          style={styles.centerState}
+        >
+          <ActivityIndicator
+            size="large"
+            color={purple}
+          />
+
+          <Text
+            style={[
+              styles.stateTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Loading assessment
+          </Text>
+
+          <Text
+            style={[
+              styles.stateDescription,
+              {
+                color:
+                  colors.textSecondary,
+              },
+            ]}
+          >
+            Retrieving assessment
+            details and questions.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // =======================================================
+  // ERROR
+  // =======================================================
+
+  if (error || !assessment) {
+    return (
+      <SafeAreaView
+        style={[
+          styles.container,
+          {
+            backgroundColor:
+              colors.background,
+          },
+        ]}
+      >
+        <View
+          style={styles.errorHeader}
+        >
+          <TouchableOpacity
+            style={[
+              styles.backButton,
+              {
+                backgroundColor:
+                  colors.backgroundElement,
+              },
+            ]}
+            onPress={() =>
+              router.back()
+            }
+          >
+            <Ionicons
+              name="chevron-back"
+              size={22}
+              color={colors.text}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View
+          style={styles.centerState}
+        >
+          <Ionicons
+            name="alert-circle-outline"
+            size={48}
+            color={purple}
+          />
+
+          <Text
+            style={[
+              styles.stateTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            Unable to load assessment
+          </Text>
+
+          <Text
+            style={[
+              styles.stateDescription,
+              {
+                color:
+                  colors.textSecondary,
+              },
+            ]}
+          >
+            {error ||
+              "Assessment information is unavailable."}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={handleRetry}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={18}
+              color="#FFFFFF"
+            />
+
+            <Text
+              style={
+                styles.retryButtonText
+              }
+            >
+              Try Again
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // =======================================================
+  // SCREEN
+  // =======================================================
+
+  return (
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor:
+            colors.background,
+        },
+      ]}
+    >
+      <ScrollView
+        contentContainerStyle={
+          styles.scrollContent
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={purple}
+            colors={[purple]}
+          />
+        }
+      >
+        {/* ================= HEADER ================= */}
+
         <View style={styles.header}>
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
+            style={[
+              styles.backButton,
+              {
+                backgroundColor:
+                  colors.backgroundElement,
+              },
+            ]}
+            onPress={() =>
+              router.back()
+            }
             accessibilityRole="button"
           >
-            <Text style={styles.backText}>‹</Text>
+            <Ionicons
+              name="chevron-back"
+              size={22}
+              color={colors.text}
+            />
           </TouchableOpacity>
 
-          <View style={styles.headerText}>
-            <Text style={styles.headerTitle}>
+          <View
+            style={styles.headerText}
+          >
+            <Text
+              style={[
+                styles.headerTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
               Assessment Details
             </Text>
 
-            <Text style={styles.headerSubtitle}>
-              {selectedLanguage} Programming
+            <Text
+              style={[
+                styles.headerSubtitle,
+                {
+                  color:
+                    colors.textSecondary,
+                },
+              ]}
+            >
+              {assessment.programLang
+                ? `${assessment.programLang} Programming`
+                : formatAssessmentType(
+                    assessment.assessmentType
+                  )}
             </Text>
           </View>
         </View>
 
-        {/* ASSESSMENT TITLE */}
-        <View style={styles.titleCard}>
-          <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>
-              ASSESSMENT
+        {/* ================= TITLE ================= */}
+
+        <View
+          style={[
+            styles.titleCard,
+            {
+              backgroundColor:
+                colors.backgroundElement,
+
+              borderColor:
+                colors.border,
+            },
+          ]}
+        >
+          <View
+            style={[
+              styles.activeBadge,
+              {
+                backgroundColor:
+                  isDark
+                    ? "#2D2140"
+                    : "#EDE9FE",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.activeBadgeText,
+                {
+                  color: purpleText,
+                },
+              ]}
+            >
+              {formatAssessmentType(
+                assessment.assessmentType
+              ).toUpperCase()}
             </Text>
           </View>
 
-          <Text style={styles.assessmentTitle}>
-            {selectedTitle}
+          <Text
+            style={[
+              styles.assessmentTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
+            {assessment.title}
           </Text>
 
-          <Text style={styles.assessmentDescription}>
-            {isConditionalStatements
-              ? "Practise using conditional statements to make decisions in Python."
-              : isLoops
-              ? "Practise using for loops and while loops to repeat tasks in Python."
-              : "Review the assessment instructions before opening the Coding Workspace."}
-          </Text>
+          {assessment.description ? (
+            <Text
+              style={[
+                styles.assessmentDescription,
+                {
+                  color:
+                    colors.textSecondary,
+                },
+              ]}
+            >
+              {
+                assessment.description
+              }
+            </Text>
+          ) : null}
         </View>
 
-        {/* ASSESSMENT INFORMATION */}
-        <Text style={styles.sectionTitle}>
+        {/* ================= INFORMATION ================= */}
+
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
           Assessment Information
         </Text>
 
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Assessment Type
-            </Text>
-            <Text style={styles.infoValue}>
-              Programming Task
-            </Text>
-          </View>
+        <View
+          style={[
+            styles.infoCard,
+            {
+              backgroundColor:
+                colors.backgroundElement,
 
-          <View style={styles.divider} />
+              borderColor:
+                colors.border,
+            },
+          ]}
+        >
+          <InfoRow
+            label="Assessment Type"
+            value={formatAssessmentType(
+              assessment.assessmentType
+            )}
+            labelColor={
+              colors.textSecondary
+            }
+            valueColor={colors.text}
+          />
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Assessment
-            </Text>
-            <Text style={styles.infoValue}>
-              {selectedTitle}
-            </Text>
-          </View>
+          <Divider
+            color={colors.border}
+          />
 
-          <View style={styles.divider} />
+          <InfoRow
+            label="Language"
+            value={
+              assessment.programLang ||
+              "Not specified"
+            }
+            labelColor={
+              colors.textSecondary
+            }
+            valueColor={colors.text}
+          />
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Language
-            </Text>
-            <Text style={styles.infoValue}>
-              {selectedLanguage}
-            </Text>
-          </View>
+          <Divider
+            color={colors.border}
+          />
 
-          <View style={styles.divider} />
+          <InfoRow
+            label="Time Limit"
+            value={
+              assessment.timeLimit != null
+                ? `${assessment.timeLimit} minutes`
+                : "Not specified"
+            }
+            labelColor={
+              colors.textSecondary
+            }
+            valueColor={colors.text}
+          />
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Total Marks
-            </Text>
-            <Text style={styles.infoValue}>
-              Not provided
-            </Text>
-          </View>
+          <Divider
+            color={colors.border}
+          />
 
-          <View style={styles.divider} />
+          <InfoRow
+            label="Questions"
+            value={String(
+              questions.length
+            )}
+            labelColor={
+              colors.textSecondary
+            }
+            valueColor={colors.text}
+          />
 
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>
-              Estimated Time
-            </Text>
-            <Text style={styles.infoValue}>
-              Not provided
-            </Text>
-          </View>
+          <Divider
+            color={colors.border}
+          />
+
+          <InfoRow
+            label="AI Assistance"
+            value={
+              assessment.aiAllowed
+                ? "Allowed"
+                : "Not Allowed"
+            }
+            labelColor={
+              colors.textSecondary
+            }
+            valueColor={
+              assessment.aiAllowed
+                ? "#4ADE80"
+                : colors.textSecondary
+            }
+          />
         </View>
 
-        {/* ASSESSMENT TASK */}
-        <Text style={styles.sectionTitle}>
-          Your Task
+        {/* ================= QUESTIONS ================= */}
+
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          Assessment Questions
         </Text>
 
-        <View style={styles.taskCard}>
-          {isConditionalStatements ? (
-            <>
-              <Text style={styles.taskText}>
-                Write a Python program that asks the user
-                to enter their mark as a percentage.
-              </Text>
+        {questions.length === 0 ? (
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor:
+                  colors.backgroundElement,
 
-              <Text style={styles.taskText}>
-                Your program must use conditional statements
-                to display the correct result based on the
-                mark entered.
-              </Text>
+                borderColor:
+                  colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="help-circle-outline"
+              size={36}
+              color={purple}
+            />
 
-              <View style={styles.requirement}>
-                <Text style={styles.requirementNumber}>1</Text>
-                <Text style={styles.requirementText}>
-                  If the mark is 80 or higher, display
-                  "Distinction".
-                </Text>
-              </View>
-
-              <View style={styles.requirement}>
-                <Text style={styles.requirementNumber}>2</Text>
-                <Text style={styles.requirementText}>
-                  If the mark is between 50 and 79,
-                  display "Pass".
-                </Text>
-              </View>
-
-              <View style={styles.requirement}>
-                <Text style={styles.requirementNumber}>3</Text>
-                <Text style={styles.requirementText}>
-                  If the mark is below 50, display "Fail".
-                </Text>
-              </View>
-
-              <Text style={styles.warningText}>
-                Note: These are the existing sample instructions.
-                The Coding Workspace currently shows a different
-                distinction threshold. Confirm the official
-                requirements before submitting.
-              </Text>
-            </>
-          ) : isLoops ? (
-            <>
-              <Text style={styles.taskText}>
-                Practise using for loops and while loops
-                in Python.
-              </Text>
-
-              <Text style={styles.taskText}>
-                The full assessment question and marking
-                requirements have not yet been loaded
-                from the backend.
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.taskText}>
-              The full assessment instructions have not
-              yet been loaded from the backend.
+            <Text
+              style={[
+                styles.emptyTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              No questions available
             </Text>
-          )}
-        </View>
 
-        {/* INSTRUCTIONS */}
-        <Text style={styles.sectionTitle}>
+            <Text
+              style={[
+                styles.emptyDescription,
+                {
+                  color:
+                    colors.textSecondary,
+                },
+              ]}
+            >
+              No questions have been
+              added to this assessment
+              yet.
+            </Text>
+          </View>
+        ) : (
+          questions.map(
+            (question, index) => {
+              const isCodingQuestion =
+                question.questionType?.toUpperCase() ===
+                "CODING_CHALLENGE";
+
+              return (
+                <View
+                  key={
+                    question.questionID
+                  }
+                  style={[
+                    styles.questionCard,
+                    {
+                      backgroundColor:
+                        colors.backgroundElement,
+
+                      borderColor:
+                        colors.border,
+                    },
+                  ]}
+                >
+                  {/* QUESTION HEADER */}
+
+                  <View
+                    style={
+                      styles.questionHeader
+                    }
+                  >
+                    <View
+                      style={[
+                        styles.questionNumber,
+                        {
+                          backgroundColor:
+                            isDark
+                              ? "#2D2140"
+                              : "#EDE9FE",
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.questionNumberText,
+                          {
+                            color:
+                              purpleText,
+                          },
+                        ]}
+                      >
+                        {String(
+                          index + 1
+                        ).padStart(
+                          2,
+                          "0"
+                        )}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={
+                        styles.questionHeading
+                      }
+                    >
+                      <Text
+                        style={[
+                          styles.questionType,
+                          {
+                            color:
+                              purpleText,
+                          },
+                        ]}
+                      >
+                        {formatQuestionType(
+                          question.questionType
+                        )}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.questionLabel,
+                          {
+                            color:
+                              colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        Question{" "}
+                        {index + 1}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* QUESTION PROMPT */}
+
+                  <Text
+                    style={[
+                      styles.questionPrompt,
+                      {
+                        color:
+                          colors.text,
+                      },
+                    ]}
+                  >
+                    {question.prompt}
+                  </Text>
+
+                  {/* CODING CHALLENGE BUTTON */}
+
+                  {isCodingQuestion ? (
+                    <TouchableOpacity
+                      style={
+                        styles.openQuestionButton
+                      }
+                      onPress={() =>
+                        openCodingQuestion(
+                          question
+                        )
+                      }
+                      accessibilityRole="button"
+                    >
+                      <Text
+                        style={
+                          styles.openQuestionButtonText
+                        }
+                      >
+                        Open Coding
+                        Challenge
+                      </Text>
+
+                      <Ionicons
+                        name="code-slash-outline"
+                        size={17}
+                        color="#FFFFFF"
+                      />
+                    </TouchableOpacity>
+                  ) : (
+                    <View
+                      style={[
+                        styles.nonCodingNotice,
+                        {
+                          backgroundColor:
+                            isDark
+                              ? "#202020"
+                              : "#F5F5F5",
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="document-text-outline"
+                        size={16}
+                        color={
+                          colors.textSecondary
+                        }
+                      />
+
+                      <Text
+                        style={[
+                          styles.nonCodingText,
+                          {
+                            color:
+                              colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        This question
+                        does not use the
+                        coding workspace.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            }
+          )
+        )}
+
+        {/* ================= INSTRUCTIONS ================= */}
+
+        <Text
+          style={[
+            styles.sectionTitle,
+            styles.sectionSpacing,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
           Instructions
         </Text>
 
-        <View style={styles.instructionsCard}>
-          <Text style={styles.instruction}>
-            • Read the assessment carefully before starting.
-          </Text>
+        <View
+          style={[
+            styles.instructionsCard,
+            {
+              backgroundColor:
+                colors.backgroundElement,
 
-          <Text style={styles.instruction}>
-            • Write your solution using the required
-            programming language.
-          </Text>
-
-          <Text style={styles.instruction}>
-            • Review and test your code before submitting.
-          </Text>
-
-          <Text style={styles.instruction}>
-            • You may use the DevMate AI Assistant
-            for guidance.
-          </Text>
-
-          <Text style={styles.instruction}>
-            • Make sure your final solution is your own work.
-          </Text>
-        </View>
-
-        {/* AI INFORMATION */}
-        <View style={styles.aiCard}>
-          <View style={styles.aiIcon}>
-            <Text style={styles.aiIconText}>AI</Text>
-          </View>
-
-          <View style={styles.aiContent}>
-            <Text style={styles.aiTitle}>
-              AI Assistance Available
-            </Text>
-
-            <Text style={styles.aiDescription}>
-              DevMate can provide hints and explanations
-              while you work. Your AI interactions may
-              be recorded as part of your learning activity.
-            </Text>
-          </View>
-        </View>
-
-        {/* START ASSESSMENT BUTTON */}
-        <TouchableOpacity
-          style={styles.startButton}
-          onPress={openCodingWorkspace}
-          accessibilityRole="button"
-          accessibilityLabel="Continue Assessment"
+              borderColor:
+                colors.border,
+            },
+          ]}
         >
-          <Text style={styles.startButtonText}>
-            Continue Assessment
-          </Text>
-        </TouchableOpacity>
+          <InstructionRow
+            text="Read each assessment question carefully before starting."
+            color={
+              colors.textSecondary
+            }
+          />
 
-        <Text style={styles.footerNote}>
-          Assessment details and submission IDs must be
-          verified against the backend before final testing.
+          <InstructionRow
+            text="Use the programming language specified for the assessment where required."
+            color={
+              colors.textSecondary
+            }
+          />
+
+          <InstructionRow
+            text="Review and test your solution before submitting."
+            color={
+              colors.textSecondary
+            }
+          />
+
+          <InstructionRow
+            text="Make sure your final submission represents your own work."
+            color={
+              colors.textSecondary
+            }
+          />
+        </View>
+
+        {/* ================= AI STATUS ================= */}
+
+        <View
+          style={[
+            styles.aiCard,
+            {
+              backgroundColor:
+                isDark
+                  ? "#17131F"
+                  : "#F5F3FF",
+
+              borderColor:
+                isDark
+                  ? "#2D2140"
+                  : "#DDD6FE",
+            },
+          ]}
+        >
+          <View
+            style={
+              styles.aiIcon
+            }
+          >
+            <Text
+              style={
+                styles.aiIconText
+              }
+            >
+              AI
+            </Text>
+          </View>
+
+          <View
+            style={
+              styles.aiContent
+            }
+          >
+            <Text
+              style={[
+                styles.aiTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              {assessment.aiAllowed
+                ? "AI Assistance Available"
+                : "AI Assistance Disabled"}
+            </Text>
+
+            <Text
+              style={[
+                styles.aiDescription,
+                {
+                  color:
+                    colors.textSecondary,
+                },
+              ]}
+            >
+              {assessment.aiAllowed
+                ? "DevMate AI assistance is enabled for this assessment."
+                : "AI assistance is disabled for this assessment."}
+            </Text>
+          </View>
+        </View>
+
+        {/* No generic Start Assessment button.
+            Coding questions are opened individually above. */}
+
+        <Text
+          style={[
+            styles.footerText,
+            {
+              color:
+                colors.textSecondary,
+            },
+          ]}
+        >
+          Select a coding challenge
+          above to open the Coding
+          Workspace.
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ================= STYLES =================
+// =========================================================
+// INFO ROW
+// =========================================================
+
+function InfoRow({
+  label,
+  value,
+  labelColor,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  labelColor: string;
+  valueColor: string;
+}) {
+  return (
+    <View style={styles.infoRow}>
+      <Text
+        style={[
+          styles.infoLabel,
+          {
+            color: labelColor,
+          },
+        ]}
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={[
+          styles.infoValue,
+          {
+            color: valueColor,
+          },
+        ]}
+      >
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+// =========================================================
+// DIVIDER
+// =========================================================
+
+function Divider({
+  color,
+}: {
+  color: string;
+}) {
+  return (
+    <View
+      style={[
+        styles.divider,
+        {
+          backgroundColor: color,
+        },
+      ]}
+    />
+  );
+}
+
+// =========================================================
+// INSTRUCTION ROW
+// =========================================================
+
+function InstructionRow({
+  text,
+  color,
+}: {
+  text: string;
+  color: string;
+}) {
+  return (
+    <View
+      style={
+        styles.instructionRow
+      }
+    >
+      <Ionicons
+        name="checkmark-circle-outline"
+        size={17}
+        color="#8B5CF6"
+      />
+
+      <Text
+        style={[
+          styles.instruction,
+          {
+            color,
+          },
+        ]}
+      >
+        {text}
+      </Text>
+    </View>
+  );
+}
+
+// =========================================================
+// STYLES
+// =========================================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D0D0D",
   },
 
   scrollContent: {
     padding: 20,
     paddingBottom: 45,
   },
+
+  // =======================================================
+  // HEADER
+  // =======================================================
 
   header: {
     flexDirection: "row",
@@ -326,16 +1199,9 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#1A1A1A",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
-  },
-
-  backText: {
-    color: "#FFFFFF",
-    fontSize: 30,
-    lineHeight: 32,
   },
 
   headerText: {
@@ -343,19 +1209,26 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    color: "#FFFFFF",
     fontSize: 24,
     fontWeight: "bold",
   },
 
   headerSubtitle: {
-    color: "#888888",
     fontSize: 13,
     marginTop: 3,
   },
 
+  errorHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 15,
+  },
+
+  // =======================================================
+  // TITLE
+  // =======================================================
+
   titleCard: {
-    backgroundColor: "#1A1A1A",
+    borderWidth: 1,
     borderRadius: 12,
     padding: 20,
     marginBottom: 28,
@@ -363,7 +1236,6 @@ const styles = StyleSheet.create({
 
   activeBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#2D2140",
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 8,
@@ -371,33 +1243,41 @@ const styles = StyleSheet.create({
   },
 
   activeBadgeText: {
-    color: "#A78BFA",
     fontSize: 9,
     fontWeight: "bold",
   },
 
   assessmentTitle: {
-    color: "#FFFFFF",
     fontSize: 22,
     fontWeight: "bold",
   },
 
   assessmentDescription: {
-    color: "#A3A3A3",
     fontSize: 13,
     lineHeight: 20,
     marginTop: 8,
   },
 
+  // =======================================================
+  // SECTIONS
+  // =======================================================
+
   sectionTitle: {
-    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
   },
 
+  sectionSpacing: {
+    marginTop: 28,
+  },
+
+  // =======================================================
+  // INFORMATION
+  // =======================================================
+
   infoCard: {
-    backgroundColor: "#1A1A1A",
+    borderWidth: 1,
     borderRadius: 12,
     padding: 17,
     marginBottom: 28,
@@ -405,19 +1285,18 @@ const styles = StyleSheet.create({
 
   infoRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent:
+      "space-between",
     alignItems: "center",
     paddingVertical: 5,
   },
 
   infoLabel: {
-    color: "#888888",
     fontSize: 13,
     flex: 1,
   },
 
   infoValue: {
-    color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "600",
     flex: 1,
@@ -426,76 +1305,151 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: "#292929",
     marginVertical: 11,
   },
 
-  taskCard: {
-    backgroundColor: "#1A1A1A",
+  // =======================================================
+  // QUESTIONS
+  // =======================================================
+
+  questionCard: {
+    borderWidth: 1,
     borderRadius: 12,
-    padding: 18,
-    marginBottom: 28,
+    padding: 16,
+    marginBottom: 12,
   },
 
-  taskText: {
-    color: "#D4D4D4",
-    fontSize: 13,
-    lineHeight: 20,
+  questionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 13,
   },
 
-  requirement: {
+  questionNumber: {
+    width: 38,
+    height: 38,
+    borderRadius: 9,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 11,
+  },
+
+  questionNumberText: {
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+
+  questionHeading: {
+    flex: 1,
+  },
+
+  questionType: {
+    fontSize: 11,
+    fontWeight: "bold",
+  },
+
+  questionLabel: {
+    fontSize: 10,
+    marginTop: 3,
+  },
+
+  questionPrompt: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+
+  // =======================================================
+  // OPEN CODING QUESTION
+  // =======================================================
+
+  openQuestionButton: {
+    backgroundColor: "#8B5CF6",
+    borderRadius: 9,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginTop: 15,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+
+  openQuestionButtonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  nonCodingNotice: {
+    borderRadius: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  nonCodingText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  // =======================================================
+  // EMPTY
+  // =======================================================
+
+  emptyCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 24,
+    alignItems: "center",
+  },
+
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
     marginTop: 10,
   },
 
-  requirementNumber: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "#2D2140",
-    color: "#A78BFA",
-    textAlign: "center",
-    lineHeight: 26,
-    fontSize: 11,
-    fontWeight: "bold",
-    marginRight: 10,
-  },
-
-  requirementText: {
-    flex: 1,
-    color: "#A3A3A3",
+  emptyDescription: {
     fontSize: 12,
     lineHeight: 18,
-    paddingTop: 4,
+    textAlign: "center",
+    marginTop: 6,
   },
 
-  warningText: {
-    color: "#FBBF24",
-    fontSize: 12,
-    lineHeight: 19,
-    marginTop: 18,
-  },
+  // =======================================================
+  // INSTRUCTIONS
+  // =======================================================
 
   instructionsCard: {
-    backgroundColor: "#1A1A1A",
+    borderWidth: 1,
     borderRadius: 12,
     padding: 18,
     marginBottom: 20,
   },
 
-  instruction: {
-    color: "#A3A3A3",
-    fontSize: 13,
-    lineHeight: 22,
-    marginBottom: 5,
+  instructionRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 10,
   },
 
+  instruction: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 20,
+    marginLeft: 9,
+  },
+
+  // =======================================================
+  // AI
+  // =======================================================
+
   aiCard: {
-    backgroundColor: "#17131F",
     borderWidth: 1,
-    borderColor: "#2D2140",
     borderRadius: 12,
     padding: 16,
     flexDirection: "row",
@@ -523,36 +1477,66 @@ const styles = StyleSheet.create({
   },
 
   aiTitle: {
-    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "bold",
     marginBottom: 5,
   },
 
   aiDescription: {
-    color: "#A3A3A3",
     fontSize: 12,
     lineHeight: 18,
   },
 
-  startButton: {
-    backgroundColor: "#8B5CF6",
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
+  // =======================================================
+  // FOOTER
+  // =======================================================
 
-  startButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-
-  footerNote: {
-    color: "#777777",
+  footerText: {
     fontSize: 11,
-    textAlign: "center",
-    marginTop: 12,
     lineHeight: 17,
+    textAlign: "center",
+    marginTop: 2,
+  },
+
+  // =======================================================
+  // STATES
+  // =======================================================
+
+  centerState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 30,
+  },
+
+  stateTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    marginTop: 15,
+    textAlign: "center",
+  },
+
+  stateDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  retryButton: {
+    backgroundColor: "#8B5CF6",
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "bold",
   },
 });

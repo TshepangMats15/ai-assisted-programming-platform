@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "../../context/ThemeContext";
 
 export default function StudentTabsLayout() {
-  // Get the current theme
   const { isDark, colors } = useAppTheme();
 
   return (
@@ -13,13 +12,11 @@ export default function StudentTabsLayout() {
       screenOptions={{
         headerShown: false,
 
-        // Active and inactive navigation colours
         tabBarActiveTintColor: "#8B5CF6",
         tabBarInactiveTintColor: isDark
           ? "#999999"
           : "#777777",
 
-        // Navigation bar appearance
         tabBarStyle: {
           backgroundColor: isDark ? "#151515" : "#FFFFFF",
           borderTopColor: isDark ? "#292929" : "#E5E5E5",
@@ -29,7 +26,6 @@ export default function StudentTabsLayout() {
           paddingBottom: 8,
         },
 
-        // Screen background
         sceneStyle: {
           backgroundColor: colors.background,
         },
@@ -49,7 +45,7 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="home-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}
@@ -64,12 +60,13 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="book-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}
       />
 
+      
       {/* SETTINGS */}
       <Tabs.Screen
         name="settings"
@@ -79,7 +76,7 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="settings-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}
@@ -94,7 +91,7 @@ export default function StudentTabsLayout() {
             <Ionicons
               name="person-circle-outline"
               size={size}
-              color={color}
+              color={typeof color === "string" ? color : "#8B5CF6"}
             />
           ),
         }}

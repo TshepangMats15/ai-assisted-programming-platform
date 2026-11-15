@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import {
   SafeAreaView,
   ScrollView,
@@ -34,8 +34,6 @@ export default function AIAssistantScreen() {
     },
   ]);
 
-  const scrollViewRef = useRef<ScrollView>(null);
-
   const handleSend = async () => {
     const userText = message.trim();
 
@@ -43,54 +41,63 @@ export default function AIAssistantScreen() {
       return;
     }
 
-    setMessages((previous) => [
-      ...previous,
-      {
-        id: `${Date.now()}-student`,
-        role: "student",
-        text: userText,
-      },
+    const newMessage: ChatMessage = {
+      id: `${Date.now()}-student`,
+      role: "student",
+      text: userText,
+    };
+
+    setMessages((previousMessages) => [
+      ...previousMessages,
+      newMessage,
     ]);
 
     setMessage("");
     setLoading(true);
 
     try {
-      const auth = getAuth();
-      const user = auth.currentUser;
+      // Get the currently signed-in Firebase user.
+      const user = getAuth().currentUser;
 
       if (!user) {
         throw new Error(
-          "You are not signed in. Please log in before using AI Assistance."
+          "Please log in before using DevMate AI."
         );
       }
 
+      // Get the user's Firebase authentication token.
       const firebaseToken = await user.getIdToken();
 
-      const aiResponse = await askAI(userText, firebaseToken);
+      // Send the question and token to the real backend.
+      const aiResponse = await askAI(
+        userText,
+        firebaseToken
+      );
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          text: aiResponse,
-        },
+      const assistantMessage: ChatMessage = {
+        id: `${Date.now()}-assistant`,
+        role: "assistant",
+        text: aiResponse,
+      };
+
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        assistantMessage,
       ]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage =
         error instanceof Error
           ? error.message
           : "An unexpected error occurred.";
 
-      console.error("DevMate AI Error:", errorMessage);
-
-      setMessages((previous) => [
-        ...previous,
+      setMessages((previousMessages) => [
+        ...previousMessages,
         {
           id: `${Date.now()}-error`,
           role: "assistant",
-          text: `Unable to get an AI response.\n\n${errorMessage}`,
+          text:
+            "Unable to get an AI response. " +
+            errorMessage,
         },
       ]);
     } finally {
@@ -102,28 +109,34 @@ export default function AIAssistantScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          Platform.OS === "ios" ? "padding" : undefined
+        }
       >
+        {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backText}>‹ Back</Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backText}>
+              ‹ Back
+            </Text>
           </TouchableOpacity>
 
-          <Text style={styles.title}>AI Assistant</Text>
+          <Text style={styles.title}>
+            AI Assistant
+          </Text>
 
           <Text style={styles.subtitle}>
             Your programming learning companion
           </Text>
         </View>
 
+        {/* CHAT MESSAGES */}
         <ScrollView
-          ref={scrollViewRef}
           style={styles.chatArea}
           contentContainerStyle={styles.chatContent}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() =>
-            scrollViewRef.current?.scrollToEnd({ animated: true })
-          }
         >
           {messages.map((item) => (
             <View
@@ -136,16 +149,30 @@ export default function AIAssistantScreen() {
               ]}
             >
               <Text style={styles.messageRole}>
-                {item.role === "student" ? "You" : "DevMate AI"}
+                {item.role === "student"
+                  ? "You"
+                  : "DevMate AI"}
               </Text>
 
-              <Text style={styles.messageText}>{item.text}</Text>
+              <Text style={styles.messageText}>
+                {item.text}
+              </Text>
             </View>
           ))}
 
           {loading && (
-            <View style={[styles.messageBubble, styles.assistantBubble]}>
-              <ActivityIndicator color="#8B5CF6" />
+            <View
+              style={[
+                styles.messageBubble,
+                styles.assistantBubble,
+                styles.loadingBubble,
+              ]}
+            >
+              <ActivityIndicator
+                size="small"
+                color="#8B5CF6"
+              />
+
               <Text style={styles.loadingText}>
                 DevMate AI is thinking...
               </Text>
@@ -153,6 +180,7 @@ export default function AIAssistantScreen() {
           )}
         </ScrollView>
 
+        {/* MESSAGE INPUT */}
         <View style={styles.inputArea}>
           <TextInput
             style={styles.input}
@@ -170,9 +198,18 @@ export default function AIAssistantScreen() {
               loading && styles.disabledButton,
             ]}
             onPress={handleSend}
-            disabled={loading}
+            disabled={loading || !message.trim()}
           >
-            <Text style={styles.sendText}>Send</Text>
+            {loading ? (
+              <ActivityIndicator
+                size="small"
+                color="#FFFFFF"
+              />
+            ) : (
+              <Text style={styles.sendText}>
+                Send
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -249,10 +286,15 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
+  loadingBubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
   loadingText: {
     color: "#A3A3A3",
-    fontSize: 12,
-    marginTop: 8,
+    fontSize: 13,
   },
 
   inputArea: {
@@ -277,6 +319,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
     borderRadius: 10,
+    minWidth: 65,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   disabledButton: {

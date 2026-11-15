@@ -1,9 +1,11 @@
 
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -12,12 +14,18 @@ import {
   View,
 } from "react-native";
 
-// Import the DevMate theme
+// Import the DevMate theme & API
 import { useAppTheme } from "../../context/ThemeContext";
+import api, { CourseworkDTO } from "../../constants/api";
 
 export default function LearnScreen() {
   // Get the current light or dark theme
   const { isDark, colors } = useAppTheme();
+
+  // Dynamic courses from backend
+  const [courses, setCourses] = useState<CourseworkDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Colours that change with the theme
   const background = colors.background;
@@ -26,6 +34,27 @@ export default function LearnScreen() {
   const secondaryText = isDark ? "#A3A3A3" : "#666666";
   const borderColor = isDark ? "#292929" : "#E5E7EB";
   const purple = "#8B5CF6";
+
+  const loadCourses = useCallback(async () => {
+    try {
+      const data = await api.coursework.getAll();
+      setCourses(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.warn("Failed to load courses:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCourses();
+  }, [loadCourses]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCourses();
+  };
 
   return (
     <SafeAreaView
@@ -37,6 +66,14 @@ export default function LearnScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={purple}
+            colors={[purple]}
+          />
+        }
       >
         {/* HEADER */}
         <View style={styles.header}>
@@ -115,107 +152,106 @@ export default function LearnScreen() {
           Programming Courses
         </Text>
 
-        {/* PYTHON PROGRAMMING */}
-        <TouchableOpacity
-          style={[
-            styles.courseCard,
-            {
-              backgroundColor: cardBackground,
-              borderColor,
-            },
-          ]}
-          onPress={() => router.push("/coursework")}
-        >
-          <View style={styles.courseInfo}>
-            <View style={styles.courseIcon}>
-              <Ionicons
-                name="code-slash-outline"
-                size={25}
-                color="#A78BFA"
-              />
-            </View>
-
-            <View style={styles.courseDetails}>
-              <Text
-                style={[
-                  styles.cardTitle,
-                  { color: primaryText },
-                ]}
-              >
-                Python Programming
-              </Text>
-
-              <Text
-                style={[
-                  styles.cardSubtitle,
-                  { color: secondaryText },
-                ]}
-              >
-                Programming Fundamentals
-              </Text>
-
-              <Text style={styles.courseAction}>
-                View coursework
-              </Text>
-            </View>
-
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color={purple}
+            style={{ marginVertical: 25 }}
+          />
+        ) : courses.length === 0 ? (
+          <View
+            style={[
+              styles.emptyCard,
+              {
+                backgroundColor: cardBackground,
+                borderColor,
+              },
+            ]}
+          >
             <Ionicons
-              name="chevron-forward"
-              size={20}
+              name="folder-open-outline"
+              size={30}
               color={purple}
             />
+
+            <Text
+              style={[
+                styles.emptyTitle,
+                { color: primaryText },
+              ]}
+            >
+              No courses available
+            </Text>
+
+            <Text
+              style={[
+                styles.emptyDescription,
+                { color: secondaryText },
+              ]}
+            >
+              Courses created by your administrator will appear here.
+            </Text>
           </View>
-        </TouchableOpacity>
+        ) : (
+          courses.map((course) => (
+            <TouchableOpacity
+              key={course.courseID}
+              style={[
+                styles.courseCard,
+                {
+                  backgroundColor: cardBackground,
+                  borderColor,
+                },
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: "/assessments",
+                  params: { courseID: course.courseID },
+                })
+              }
+            >
+              <View style={styles.courseInfo}>
+                <View style={styles.courseIcon}>
+                  <Ionicons
+                    name="code-slash-outline"
+                    size={25}
+                    color="#A78BFA"
+                  />
+                </View>
 
-        {/* WEB DESIGN */}
-        <View
-          style={[
-            styles.courseCard,
-            {
-              backgroundColor: cardBackground,
-              borderColor,
-            },
-          ]}
-        >
-          <View style={styles.courseInfo}>
-            <View style={styles.courseIcon}>
-              <Ionicons
-                name="globe-outline"
-                size={25}
-                color="#A78BFA"
-              />
-            </View>
+                <View style={styles.courseDetails}>
+                  <Text
+                    style={[
+                      styles.cardTitle,
+                      { color: primaryText },
+                    ]}
+                  >
+                    {course.title}
+                  </Text>
 
-            <View style={styles.courseDetails}>
-              <Text
-                style={[
-                  styles.cardTitle,
-                  { color: primaryText },
-                ]}
-              >
-                Introduction to Web Design
-              </Text>
+                  <Text
+                    style={[
+                      styles.cardSubtitle,
+                      { color: secondaryText },
+                    ]}
+                  >
+                    {course.module || "Programming Fundamentals"}
+                  </Text>
 
-              <Text
-                style={[
-                  styles.cardSubtitle,
-                  { color: secondaryText },
-                ]}
-              >
-                Web Development
-              </Text>
+                  <Text style={styles.courseAction}>
+                    View coursework
+                  </Text>
+                </View>
 
-              <Text
-                style={[
-                  styles.unavailableText,
-                  { color: secondaryText },
-                ]}
-              >
-                Course content not yet connected
-              </Text>
-            </View>
-          </View>
-        </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={20}
+                  color={purple}
+                />
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
 
         {/* EXPLORE */}
         <Text

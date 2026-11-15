@@ -1,7 +1,15 @@
-
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  initializeAuth,
+  getAuth,
+  type Auth,
+} from "firebase/auth";
+
+// @ts-ignore Firebase 12 React Native export is missing from its TypeScript declarations
+import { getReactNativePersistence } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getStorage } from "firebase/storage";
+import { getFirestore } from "firebase/firestore";
 
 // Firebase configuration
 const firebaseConfig = {
@@ -14,13 +22,28 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase once
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firebase Authentication
-const auth = getAuth(app);
+// Initialize Firebase Authentication with React Native persistence
+let auth: Auth;
+
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch (error: any) {
+  if (error?.code === "auth/already-initialized") {
+    auth = getAuth(app);
+  } else {
+    throw error;
+  }
+}
 
 // Initialize Firebase Storage
 const storage = getStorage(app);
 
+// Initialize Cloud Firestore Database
+const db = getFirestore(app);
+
 // Export Firebase services
-export { auth, storage };
+export { auth, db, storage };

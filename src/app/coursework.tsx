@@ -1,7 +1,10 @@
-// DevMate Student Coursework Screen
-
+import React, { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+
 import {
+  ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -10,167 +13,595 @@ import {
   View,
 } from "react-native";
 
-// Temporary coursework data for testing the frontend
-const coursework = [
-  {
-    id: 1,
-    title: "Python Variables and Data Types",
-    course: "Python Programming",
-    dueDate: "Due date to be confirmed",
-    status: "Not Started",
-  },
-  {
-    id: 2,
-    title: "Conditional Statements",
-    course: "Python Programming",
-    dueDate: "Due date to be confirmed",
-    status: "In Progress",
-  },
-  {
-    id: 3,
-    title: "HTML and CSS Basics",
-    course: "Introduction to Web Design",
-    dueDate: "Due date to be confirmed",
-    status: "Not Started",
-  },
-];
+import { useAppTheme } from "../context/ThemeContext";
+import api, { CourseworkDTO } from "../constants/api";
 
 export default function CourseworkScreen() {
-  return (
-    <SafeAreaView style={styles.container}>
+  const { colors, isDark } = useAppTheme();
 
-      {/* ================= HEADER ================= */}
+  const purple = "#8B5CF6";
+  const purpleText = isDark ? "#A78BFA" : "#6D28D9";
+
+  const [coursework, setCoursework] = useState<CourseworkDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // =======================================================
+  // LOAD COURSEWORK
+  // =======================================================
+
+  const loadCoursework = useCallback(async () => {
+    try {
+      setError(null);
+
+      const data = await api.coursework.getAll();
+
+      setCoursework(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error("[Coursework] Failed to load coursework:", err);
+
+      setError(
+        err?.message ||
+          "Unable to load coursework. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCoursework();
+  }, [loadCoursework]);
+
+  // =======================================================
+  // REFRESH
+  // =======================================================
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+
+    try {
+      await loadCoursework();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadCoursework]);
+
+  // =======================================================
+  // RETRY
+  // =======================================================
+
+  const handleRetry = async () => {
+    setLoading(true);
+    await loadCoursework();
+  };
+
+  // =======================================================
+  // DATE FORMATTING
+  // =======================================================
+
+  const formatDueDate = (
+    dueDate?: string | null
+  ): string => {
+    if (!dueDate) {
+      return "No due date";
+    }
+
+    const parsedDate = new Date(dueDate);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return dueDate;
+    }
+
+    return `Due ${parsedDate.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })}`;
+  };
+
+  // =======================================================
+  // COURSE COUNTS
+  // =======================================================
+
+  const total = coursework.length;
+
+  /*
+   * Student progress tracking has not been implemented
+   * in the backend yet.
+   *
+   * Do not fabricate "In Progress" or "Completed" values.
+   */
+  const inProgress = 0;
+  const completed = 0;
+
+  // =======================================================
+  // NAVIGATION
+  // =======================================================
+
+  const openCoursework = (item: CourseworkDTO) => {
+    router.push({
+      pathname: "/assessments",
+      params: {
+        courseworkId: item.courseID,
+      },
+    });
+  };
+
+  return (
+    <SafeAreaView
+      style={[
+        styles.container,
+        {
+          backgroundColor: colors.background,
+        },
+      ]}
+    >
+      {/* HEADER */}
 
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => router.back()}
           style={styles.backButton}
+          onPress={() => router.back()}
         >
-          <Text style={styles.backText}>‹ Back</Text>
+          <Ionicons
+            name="chevron-back"
+            size={18}
+            color={purple}
+          />
+
+          <Text style={styles.backText}>
+            Back
+          </Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>My Coursework</Text>
+        <Text
+          style={[
+            styles.title,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
+          My Coursework
+        </Text>
 
-        <Text style={styles.subtitle}>
+        <Text
+          style={[
+            styles.subtitle,
+            {
+              color: colors.textSecondary,
+            },
+          ]}
+        >
           View your assignments and programming activities.
         </Text>
       </View>
 
+      {/* CONTENT */}
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={purple}
+            colors={[purple]}
+          />
+        }
       >
+        {/* COURSEWORK OVERVIEW */}
 
-        {/* ================= OVERVIEW ================= */}
-
-        <View style={styles.overviewCard}>
-          <Text style={styles.overviewTitle}>
+        <View
+          style={[
+            styles.overviewCard,
+            {
+              backgroundColor: colors.backgroundElement,
+            },
+          ]}
+        >
+          <Text
+            style={[
+              styles.overviewTitle,
+              {
+                color: colors.text,
+              },
+            ]}
+          >
             Coursework Overview
           </Text>
 
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>3</Text>
-              <Text style={styles.statLabel}>Total</Text>
+              <Text style={styles.statNumber}>
+                {total}
+              </Text>
+
+              <Text
+                style={[
+                  styles.statLabel,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Total
+              </Text>
             </View>
 
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>1</Text>
-              <Text style={styles.statLabel}>In Progress</Text>
+              <Text style={styles.statNumber}>
+                {inProgress}
+              </Text>
+
+              <Text
+                style={[
+                  styles.statLabel,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                In Progress
+              </Text>
             </View>
 
             <View style={styles.statItem}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={styles.statNumber}>
+                {completed}
+              </Text>
+
+              <Text
+                style={[
+                  styles.statLabel,
+                  {
+                    color: colors.textSecondary,
+                  },
+                ]}
+              >
+                Completed
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* ================= COURSEWORK LIST ================= */}
+        {/* SECTION TITLE */}
 
-        <Text style={styles.sectionTitle}>
+        <Text
+          style={[
+            styles.sectionTitle,
+            {
+              color: colors.text,
+            },
+          ]}
+        >
           Your Assignments
         </Text>
 
-        {coursework.map((item) => (
-          <View key={item.id} style={styles.courseworkCard}>
+        {/* INITIAL LOADING */}
 
-            <View style={styles.cardTop}>
-              <Text style={styles.courseName}>
-                {item.course}
-              </Text>
+        {loading && !refreshing ? (
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <ActivityIndicator
+              size="large"
+              color={purple}
+            />
 
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>
-                  {item.status}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.assignmentTitle}>
-              {item.title}
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Loading coursework
             </Text>
 
-            <Text style={styles.dueDate}>
-              {item.dueDate}
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Retrieving your coursework from DevMate.
+            </Text>
+          </View>
+        ) : error ? (
+          /* ERROR STATE */
+
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={42}
+              color={purple}
+            />
+
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              Unable to load coursework
+            </Text>
+
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              {error}
             </Text>
 
             <TouchableOpacity
-              style={styles.viewButton}
-              onPress={() =>
-                router.push({
-                  pathname: "/assessments",
-                  params: { courseworkId: String(item.id) },
-                })
-              }
+              style={styles.retryButton}
+              onPress={handleRetry}
             >
-              <Text style={styles.viewButtonText}>
-                View Assessments →
+              <Ionicons
+                name="refresh-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+
+              <Text style={styles.retryButtonText}>
+                Try Again
               </Text>
             </TouchableOpacity>
-
           </View>
-        ))}
+        ) : coursework.length === 0 ? (
+          /* REAL EMPTY STATE */
 
+          <View
+            style={[
+              styles.stateCard,
+              {
+                backgroundColor: colors.backgroundElement,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Ionicons
+              name="document-text-outline"
+              size={42}
+              color={purple}
+            />
+
+            <Text
+              style={[
+                styles.stateTitle,
+                {
+                  color: colors.text,
+                },
+              ]}
+            >
+              No assignments available
+            </Text>
+
+            <Text
+              style={[
+                styles.stateDescription,
+                {
+                  color: colors.textSecondary,
+                },
+              ]}
+            >
+              Your assignments will appear here once coursework
+              is available.
+            </Text>
+          </View>
+        ) : (
+          /* REAL COURSEWORK */
+
+          coursework.map((item) => (
+            <View
+              key={item.courseID}
+              style={[
+                styles.courseworkCard,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.cardTop}>
+                <Text
+                  style={[
+                    styles.courseName,
+                    {
+                      color: purpleText,
+                    },
+                  ]}
+                >
+                  {item.module || "Coursework"}
+                </Text>
+
+                <View
+                  style={[
+                    styles.statusBadge,
+                    {
+                      backgroundColor: isDark
+                        ? "#2D2140"
+                        : "#EDE9FE",
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusText,
+                      {
+                        color: purpleText,
+                      },
+                    ]}
+                  >
+                    AVAILABLE
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={[
+                  styles.assignmentTitle,
+                  {
+                    color: colors.text,
+                  },
+                ]}
+              >
+                {item.title}
+              </Text>
+
+              {item.description ? (
+                <Text
+                  numberOfLines={3}
+                  style={[
+                    styles.description,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {item.description}
+                </Text>
+              ) : null}
+
+              <View style={styles.metadataRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={15}
+                  color={colors.textSecondary}
+                />
+
+                <Text
+                  style={[
+                    styles.dueDate,
+                    {
+                      color: colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {formatDueDate(item.dueDate)}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.viewButton}
+                onPress={() => openCoursework(item)}
+              >
+                <Text style={styles.viewButtonText}>
+                  View Course
+                </Text>
+
+                <Ionicons
+                  name="arrow-forward"
+                  size={16}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
       </ScrollView>
 
-      {/* ================= BOTTOM NAVIGATION ================= */}
+      {/* BOTTOM NAVIGATION */}
 
-      <View style={styles.bottomNavigation}>
-
+      <View
+        style={[
+          styles.bottomNavigation,
+          {
+            backgroundColor: colors.backgroundElement,
+            borderTopColor: colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.replace("/dashboard")}
         >
-          <Text style={styles.navIcon}>⌂</Text>
-          <Text style={styles.navText}>Home</Text>
+          <Ionicons
+            name="home-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Home
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => router.replace("/learn")}
         >
-          <Text style={styles.navIcon}>▤</Text>
-          <Text style={styles.navText}>Learn</Text>
+          <Ionicons
+            name="book-outline"
+            size={22}
+            color={colors.textSecondary}
+          />
+
+          <Text
+            style={[
+              styles.navText,
+              {
+                color: colors.textSecondary,
+              },
+            ]}
+          >
+            Learn
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.activeNavIcon}>▣</Text>
-          <Text style={styles.activeNavText}>Coursework</Text>
+          <Ionicons
+            name="document-text"
+            size={22}
+            color={purple}
+          />
+
+          <Text style={styles.activeNavText}>
+            Coursework
+          </Text>
         </TouchableOpacity>
-
       </View>
-
     </SafeAreaView>
   );
 }
 
-// ================= STYLES =================
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D0D0D",
   },
 
   header: {
@@ -180,7 +611,10 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
+    gap: 3,
   },
 
   backText: {
@@ -190,31 +624,27 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#FFFFFF",
     fontSize: 28,
     fontWeight: "bold",
   },
 
   subtitle: {
-    color: "#A3A3A3",
     fontSize: 14,
     marginTop: 5,
   },
 
   scrollContent: {
     padding: 20,
-    paddingBottom: 120,
+    paddingBottom: 80,
   },
 
   overviewCard: {
-    backgroundColor: "#1A1A1A",
     borderRadius: 12,
     padding: 20,
     marginBottom: 25,
   },
 
   overviewTitle: {
-    color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "bold",
     marginBottom: 20,
@@ -237,23 +667,21 @@ const styles = StyleSheet.create({
   },
 
   statLabel: {
-    color: "#A3A3A3",
     fontSize: 12,
     marginTop: 5,
   },
 
   sectionTitle: {
-    color: "#FFFFFF",
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 15,
   },
 
   courseworkCard: {
-    backgroundColor: "#1A1A1A",
     borderRadius: 12,
     padding: 18,
     marginBottom: 15,
+    borderWidth: 1,
   },
 
   cardTop: {
@@ -261,39 +689,47 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
+    gap: 12,
   },
 
   courseName: {
-    color: "#A78BFA",
     fontSize: 12,
     fontWeight: "600",
     flex: 1,
   },
 
   statusBadge: {
-    backgroundColor: "#2D2140",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
 
   statusText: {
-    color: "#A78BFA",
     fontSize: 10,
     fontWeight: "bold",
   },
 
   assignmentTitle: {
-    color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginBottom: 8,
+  },
+
+  description: {
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+
+  metadataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 18,
   },
 
   dueDate: {
-    color: "#888888",
     fontSize: 12,
-    marginBottom: 18,
   },
 
   viewButton: {
@@ -301,6 +737,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 13,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
 
   viewButtonText: {
@@ -309,13 +748,48 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
-  // ================= BOTTOM NAVIGATION STYLES =================
+  stateCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 28,
+    alignItems: "center",
+    marginTop: 8,
+  },
+
+  stateTitle: {
+    fontSize: 17,
+    fontWeight: "bold",
+    marginTop: 14,
+    textAlign: "center",
+  },
+
+  stateDescription: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  retryButton: {
+    backgroundColor: "#8B5CF6",
+    borderRadius: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+
+  retryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "bold",
+  },
 
   bottomNavigation: {
     flexDirection: "row",
-    backgroundColor: "#1A1A1A",
     borderTopWidth: 1,
-    borderTopColor: "#333333",
     paddingVertical: 12,
     paddingHorizontal: 10,
     justifyContent: "space-around",
@@ -327,27 +801,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 5,
-  },
-
-  navIcon: {
-    color: "#888888",
-    fontSize: 23,
-    marginBottom: 5,
+    gap: 5,
   },
 
   navText: {
-    color: "#888888",
     fontSize: 11,
   },
 
-  activeNavIcon: {
-    color: "#8B5CF6",
-    fontSize: 23,
-    marginBottom: 5,
-  },
-
   activeNavText: {
-    color: "#A78BFA",
+    color: "#8B5CF6",
     fontSize: 11,
     fontWeight: "bold",
   },

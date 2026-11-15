@@ -1,9 +1,9 @@
-
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +15,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import api from "../../services/api";
 
 const COLORS = {
   background: "#0D0D0D",
@@ -51,9 +53,46 @@ const audienceOptions: Audience[] = [
   "Selected Students",
 ];
 
+function formatDate(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    return "Unknown date";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown date";
+  }
+
+  return date.toLocaleDateString("en-ZA", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// Convert a backend announcement into the shape this screen uses
+function toAnnouncement(item: any, index: number): Announcement {
+  const audience: Audience = audienceOptions.includes(item?.audience)
+    ? item.audience
+    : "All Students";
+
+  return {
+    id: String(item?.id ?? item?.announcementID ?? `announcement-${index}`),
+    title: item?.title || "Untitled announcement",
+    message: item?.message || "",
+    audience,
+    date: formatDate(item?.createdAt ?? item?.date),
+  };
+}
+
 export default function AdminAnnouncementsScreen() {
   const [announcements, setAnnouncements] =
     useState<Announcement[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,6 +101,34 @@ export default function AdminAnnouncementsScreen() {
   const [message, setMessage] = useState("");
   const [targetAudience, setTargetAudience] =
     useState<Audience>("All Students");
+
+  // Load announcements from the Spring Boot backend
+  const loadAnnouncements = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const data = await api.announcements.getAll();
+
+      if (!Array.isArray(data)) {
+        throw new Error(
+          "Unexpected response from the announcements API."
+        );
+      }
+
+      setAnnouncements(data.map(toAnnouncement));
+    } catch (err: any) {
+      setErrorMessage(
+        err?.message || "Unable to load announcements."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAnnouncements();
+  }, [loadAnnouncements]);
 
   function goBack() {
     if (router.canGoBack()) {
@@ -96,7 +163,11 @@ export default function AdminAnnouncementsScreen() {
     setIsCreating(false);
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (saving) {
+      return;
+    }
+
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
 
@@ -111,60 +182,52 @@ export default function AdminAnnouncementsScreen() {
     if (targetAudience === "Selected Students") {
       Alert.alert(
         "Select Recipients",
-        "Individual student selection has not been connected yet. Please choose another audience for this local preview."
+        "Individual student selection has not been connected yet. Please choose another audience."
       );
       return;
     }
 
-    if (editingId !== null) {
-      setAnnouncements((current) =>
-        current.map((item) =>
-          item.id === editingId
-            ? {
-                ...item,
-                title: cleanTitle,
-                message: cleanMessage,
-                audience: targetAudience,
-              }
-            : item
-        )
-      );
+    const payload = {
+      title: cleanTitle,
+      message: cleanMessage,
+      audience: targetAudience,
+    };
 
+    try {
+      setSaving(true);
+
+      if (editingId !== null) {
+        await api.announcements.update(editingId, payload);
+
+        Alert.alert(
+          "Announcement Updated",
+          "The announcement was updated successfully."
+        );
+      } else {
+        await api.announcements.create(payload);
+
+        Alert.alert(
+          "Announcement Saved",
+          "Your announcement was saved successfully."
+        );
+      }
+
+      cancelForm();
+      await loadAnnouncements();
+    } catch (err: any) {
       Alert.alert(
-        "Updated Locally",
-        "The announcement was updated in this app session only."
+        "Save Failed",
+        err?.message || "Unable to save announcement."
       );
-    } else {
-      const newAnnouncement: Announcement = {
-        id: Date.now().toString(),
-        title: cleanTitle,
-        message: cleanMessage,
-        audience: targetAudience,
-        date: new Date().toLocaleDateString("en-ZA", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        }),
-      };
-
-      setAnnouncements((current) => [
-        newAnnouncement,
-        ...current,
-      ]);
-
-      Alert.alert(
-        "Saved Locally",
-        "Your announcement was added to this screen. It has not been published or delivered to students."
-      );
+    } finally {
+      setSaving(false);
     }
-
-    cancelForm();
   }
 
   function handleDelete(item: Announcement) {
     Alert.alert(
       "Delete Announcement",
-      `Remove "${item.title}" from this temporary list?`,
+      `Delete "${item.title}"? This cannot be undone.`,
       [
         {
           text: "Cancel",
@@ -173,12 +236,16 @@ export default function AdminAnnouncementsScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => {
-            setAnnouncements((current) =>
-              current.filter(
-                (announcement) => announcement.id !== item.id
-              )
-            );
+          onPress: async () => {
+            try {
+              await api.announcements.delete(item.id);
+              await loadAnnouncements();
+            } catch (err: any) {
+              Alert.alert(
+                "Delete Failed",
+                err?.message || "Unable to delete announcement."
+              );
+            }
           },
         },
       ]
@@ -225,19 +292,20 @@ export default function AdminAnnouncementsScreen() {
             Create and manage coding club announcements.
           </Text>
 
-          {/* LOCAL DATA NOTICE */}
-          <View style={styles.noticeCard}>
-            <Ionicons
-              name="information-circle-outline"
-              size={21}
-              color={COLORS.lightPurple}
-            />
+          {/* DATA STATUS NOTICE */}
+          {errorMessage !== "" && (
+            <View style={styles.noticeCard}>
+              <Ionicons
+                name="information-circle-outline"
+                size={21}
+                color={COLORS.lightPurple}
+              />
 
-            <Text style={styles.noticeText}>
-              Local preview only. Announcements are not
-              saved to the database or delivered to students.
-            </Text>
-          </View>
+              <Text style={styles.noticeText}>
+                {errorMessage}
+              </Text>
+            </View>
+          )}
 
           {!isCreating ? (
             <>
@@ -263,7 +331,18 @@ export default function AdminAnnouncementsScreen() {
                 Announcements
               </Text>
 
-              {announcements.length === 0 ? (
+              {loading ? (
+                <View style={styles.emptyCard}>
+                  <ActivityIndicator
+                    size="large"
+                    color={COLORS.purple}
+                  />
+
+                  <Text style={styles.emptyDescription}>
+                    Loading announcements...
+                  </Text>
+                </View>
+              ) : announcements.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <View style={styles.emptyIcon}>
                     <Ionicons
@@ -274,13 +353,28 @@ export default function AdminAnnouncementsScreen() {
                   </View>
 
                   <Text style={styles.emptyTitle}>
-                    No announcements yet
+                    {errorMessage !== ""
+                      ? "Announcements unavailable"
+                      : "No announcements yet"}
                   </Text>
 
                   <Text style={styles.emptyDescription}>
-                    Create an announcement to preview
-                    how it will appear in the Admin Portal.
+                    {errorMessage !== ""
+                      ? "Announcements could not be retrieved from the backend."
+                      : "Create an announcement to share news with your students."}
                   </Text>
+
+                  {errorMessage !== "" && (
+                    <TouchableOpacity
+                      style={styles.editButton}
+                      onPress={loadAnnouncements}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.editButtonText}>
+                        Try Again
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : (
                 announcements.map((item) => (
@@ -460,6 +554,7 @@ export default function AdminAnnouncementsScreen() {
                 <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={cancelForm}
+                  disabled={saving}
                   accessibilityRole="button"
                 >
                   <Text style={styles.cancelButtonText}>
@@ -468,21 +563,31 @@ export default function AdminAnnouncementsScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.saveButton}
+                  style={[
+                    styles.saveButton,
+                    saving && { opacity: 0.6 },
+                  ]}
                   onPress={handleSave}
+                  disabled={saving}
                   accessibilityRole="button"
                 >
-                  <Ionicons
-                    name="checkmark-circle-outline"
-                    size={19}
-                    color={COLORS.white}
-                  />
+                  {saving ? (
+                    <ActivityIndicator color={COLORS.white} />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="checkmark-circle-outline"
+                        size={19}
+                        color={COLORS.white}
+                      />
 
-                  <Text style={styles.saveButtonText}>
-                    {editingId !== null
-                      ? "Save Changes"
-                      : "Save Draft"}
-                  </Text>
+                      <Text style={styles.saveButtonText}>
+                        {editingId !== null
+                          ? "Save Changes"
+                          : "Save Announcement"}
+                      </Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

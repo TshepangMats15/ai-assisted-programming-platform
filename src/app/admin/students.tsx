@@ -1,9 +1,9 @@
-
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -18,8 +18,10 @@ import {
   View,
 } from "react-native";
 
+import api from "../../services/api";
+
 type Student = {
-  id: number;
+  id: string;
   name: string;
   email: string;
   course: string;
@@ -29,21 +31,64 @@ type Student = {
 type StudentStatus = "Active" | "Inactive";
 type StudentFilter = "All" | StudentStatus;
 
+// Convert a backend user record into the shape this screen uses
+function toStudent(item: any, index: number): Student {
+  const rawStatus = String(item?.status ?? "Active").toLowerCase();
+
+  return {
+    id: String(item?.id ?? item?.uid ?? item?.userId ?? `student-${index}`),
+    name:
+      item?.fullName ||
+      item?.name ||
+      item?.displayName ||
+      "Unnamed student",
+    email: item?.email || "No email",
+    course: item?.course || "Unspecified",
+    status: rawStatus === "inactive" ? "Inactive" : "Active",
+  };
+}
+
 export default function ManageStudentsScreen() {
-  // Temporary frontend state.
-  // Real students must eventually come from the backend.
+  // Students are loaded from the Spring Boot backend (api.users).
   const [students, setStudents] = useState<Student[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<StudentFilter>("All");
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [course, setCourse] = useState("");
   const [status, setStatus] = useState<StudentStatus>("Active");
+
+  // Load real students from the backend
+  const loadStudents = useCallback(async () => {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const data = await api.users.getAll();
+
+      if (!Array.isArray(data)) {
+        throw new Error("Unexpected response from the users API.");
+      }
+
+      setStudents(data.map(toStudent));
+    } catch (err: any) {
+      setErrorMessage(err?.message || "Unable to load students.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStudents();
+  }, [loadStudents]);
 
   // Search and filter students
   const filteredStudents = students.filter((student) => {
@@ -87,8 +132,12 @@ export default function ManageStudentsScreen() {
     setModalVisible(true);
   }
 
-  // Save only to the temporary screen state
-  function saveStudent() {
+  // Save the student to the backend
+  async function saveStudent() {
+    if (saving) {
+      return;
+    }
+
     const studentName = name.trim();
     const studentEmail = email.trim().toLowerCase();
     const studentCourse = course.trim();
@@ -120,50 +169,49 @@ export default function ManageStudentsScreen() {
     if (duplicateEmail) {
       Alert.alert(
         "Duplicate Email",
-        "A student with this email already exists in this list."
+        "A student with this email already exists."
       );
       return;
     }
 
-    if (editingId !== null) {
-      setStudents((current) =>
-        current.map((student) =>
-          student.id === editingId
-            ? {
-                ...student,
-                name: studentName,
-                email: studentEmail,
-                course: studentCourse,
-                status: status,
-              }
-            : student
-        )
+    const payload = {
+      fullName: studentName,
+      email: studentEmail,
+      course: studentCourse,
+      status: status,
+    };
+
+    try {
+      setSaving(true);
+
+      if (editingId !== null) {
+        await api.users.update(editingId, payload);
+      } else {
+        await api.users.create(payload);
+      }
+
+      closeModal();
+      await loadStudents();
+
+      Alert.alert(
+        "Student Saved",
+        "The student record was saved successfully."
       );
-    } else {
-      const newStudent: Student = {
-        id: Date.now(),
-        name: studentName,
-        email: studentEmail,
-        course: studentCourse,
-        status: status,
-      };
-
-      setStudents((current) => [...current, newStudent]);
+    } catch (err: any) {
+      Alert.alert(
+        "Save Failed",
+        err?.message || "Unable to save student."
+      );
+    } finally {
+      setSaving(false);
     }
-
-    closeModal();
-
-    Alert.alert(
-      "Local Changes Saved",
-      "The student was updated in this screen only. No database changes were made."
-    );
   }
 
-  // Remove a student from the temporary list only
+  // Delete a student through the backend
   function deleteStudent(student: Student) {
     Alert.alert(
       "Remove Student",
-      `Remove ${student.name} from this temporary list? This does not delete their actual account.`,
+      `Remove ${student.name}? This deletes their record from the backend.`,
       [
         {
           text: "Cancel",
@@ -172,10 +220,16 @@ export default function ManageStudentsScreen() {
         {
           text: "Remove",
           style: "destructive",
-          onPress: () => {
-            setStudents((current) =>
-              current.filter((item) => item.id !== student.id)
-            );
+          onPress: async () => {
+            try {
+              await api.users.delete(student.id);
+              await loadStudents();
+            } catch (err: any) {
+              Alert.alert(
+                "Remove Failed",
+                err?.message || "Unable to remove student."
+              );
+            }
           },
         },
       ]
@@ -219,18 +273,19 @@ export default function ManageStudentsScreen() {
         </Text>
 
         {/* DATA STATUS */}
-        <View style={styles.noticeCard}>
-          <Ionicons
-            name="information-circle-outline"
-            size={20}
-            color="#A78BFA"
-          />
+        {errorMessage !== "" && (
+          <View style={styles.noticeCard}>
+            <Ionicons
+              name="information-circle-outline"
+              size={20}
+              color="#A78BFA"
+            />
 
-          <Text style={styles.demoNotice}>
-            Local preview only. Changes are not saved
-            to Firebase or MySQL.
-          </Text>
-        </View>
+            <Text style={styles.demoNotice}>
+              {errorMessage}
+            </Text>
+          </View>
+        )}
 
         {/* STUDENT SUMMARY */}
         <View style={styles.summaryCard}>
@@ -244,11 +299,15 @@ export default function ManageStudentsScreen() {
 
           <View>
             <Text style={styles.summaryLabel}>
-              Students in this session
+              Registered students
             </Text>
 
             <Text style={styles.summaryValue}>
-              {students.length}
+              {loading
+                ? "..."
+                : errorMessage !== ""
+                ? "—"
+                : students.length}
             </Text>
           </View>
         </View>
@@ -317,30 +376,47 @@ export default function ManageStudentsScreen() {
         {/* STUDENT LIST */}
         <FlatList
           data={filteredStudents}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
+          refreshing={loading}
+          onRefresh={loadStudents}
           ListEmptyComponent={
-            <View style={styles.emptyCard}>
-              <View style={styles.emptyIcon}>
-                <Ionicons
-                  name="people-outline"
-                  size={32}
-                  color="#A78BFA"
+            loading ? (
+              <View style={styles.emptyCard}>
+                <ActivityIndicator
+                  size="large"
+                  color="#8B5CF6"
                 />
+
+                <Text style={styles.emptyText}>
+                  Loading students...
+                </Text>
               </View>
+            ) : (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIcon}>
+                  <Ionicons
+                    name="people-outline"
+                    size={32}
+                    color="#A78BFA"
+                  />
+                </View>
 
-              <Text style={styles.emptyTitle}>
-                No students found
-              </Text>
+                <Text style={styles.emptyTitle}>
+                  No students found
+                </Text>
 
-              <Text style={styles.emptyText}>
-                {students.length === 0
-                  ? "No students have been added to this temporary list."
-                  : "Try a different search or status filter."}
-              </Text>
-            </View>
+                <Text style={styles.emptyText}>
+                  {errorMessage !== ""
+                    ? "Students could not be retrieved. Pull down to try again."
+                    : students.length === 0
+                    ? "No students have been added yet."
+                    : "Try a different search or status filter."}
+                </Text>
+              </View>
+            )
           }
           renderItem={({ item }) => (
             <View style={styles.studentCard}>
@@ -527,13 +603,21 @@ export default function ManageStudentsScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.saveButton}
+                  style={[
+                    styles.saveButton,
+                    saving && { opacity: 0.6 },
+                  ]}
                   onPress={saveStudent}
+                  disabled={saving}
                   accessibilityRole="button"
                 >
-                  <Text style={styles.saveText}>
-                    Save
-                  </Text>
+                  {saving ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveText}>
+                      Save
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </ScrollView>
