@@ -23,34 +23,33 @@ public class CoderunController {
 
     @PostMapping("/run")
     public ResponseEntity<?> runCode(
-            @RequestBody Map<String, String> request) {
-
+        @RequestBody Map<String, String> request
+    ) {
         try {
-
             Map<String, Object> result = coderunServices.run(
-                    request.get("language"),
-                    request.get("sourceCode"),
-                    request.get("stdin")
+                request.get("language"),
+                request.get("sourceCode"),
+                request.get("stdin")
             );
 
             return ResponseEntity.ok(result);
 
         } catch (IllegalArgumentException e) {
-
             return ResponseEntity.badRequest().body(
-                    Map.of("error", e.getMessage())
+                Map.of("error", e.getMessage())
             );
 
         } catch (IllegalStateException e) {
-
             return ResponseEntity.status(502).body(
-                    Map.of("error", e.getMessage()));
+                Map.of("error", e.getMessage())
+            );
 
         } catch (Exception e) {
-
             return ResponseEntity.internalServerError().body(
-                    Map.of("error", "An unexpected error occurred while running your code."
-                    )
+                Map.of(
+                    "error",
+                    "An unexpected error occurred while running your code."
+                )
             );
         }
     }
