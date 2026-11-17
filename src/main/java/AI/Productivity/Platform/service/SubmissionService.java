@@ -120,4 +120,50 @@ public class SubmissionService {
                 now
         );
     }
+    @Transactional
+public SubmissionResponse updateSubmission(
+        Long submissionId,
+        String firebaseUid,
+        String sourceCode
+) {
+    if (firebaseUid == null || firebaseUid.isBlank()) {
+        throw new ResponseStatusException(
+                HttpStatus.UNAUTHORIZED,
+                "Authentication required."
+        );
+    }
+
+    if (sourceCode == null || sourceCode.isBlank()) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Source code cannot be empty."
+        );
+    }
+
+    Submission submission = submissionRepository
+            .findById(submissionId)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Submission not found."
+            ));
+
+    if (!firebaseUid.equals(
+            submission.getUser().getFirebaseUid()
+    )) {
+        throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "You cannot edit another student's submission."
+        );
+    }
+
+    submission.setSourceCode(sourceCode);
+
+    Submission saved = submissionRepository.save(submission);
+
+    return new SubmissionResponse(
+            saved.getSubmissionId(),
+            "Code changes saved successfully.",
+            LocalDateTime.now()
+    );
+}
 }

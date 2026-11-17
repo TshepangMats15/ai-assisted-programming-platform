@@ -10,33 +10,65 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private final FirebaseAuthFilter firebaseAuthFilter;
+
+    public SecurityConfig(FirebaseAuthFilter firebaseAuthFilter) {
+        this.firebaseAuthFilter = firebaseAuthFilter;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)
             throws Exception {
 
         http
-            // Enable CORS with default configuration
+            // Keep the existing CORS configuration.
             .cors(Customizer.withDefaults())
 
-            // Disable CSRF for the stateless REST API
+            // Stateless REST API: no CSRF sessions.
             .csrf(AbstractHttpConfigurer::disable)
 
-            // Use stateless sessions
             .sessionManagement(session ->
                 session.sessionCreationPolicy(
                     SessionCreationPolicy.STATELESS
                 )
             )
 
-            // Preserve existing endpoint access rules
+            // Firebase token verification runs before Spring's
+            // username/password authentication filter.
+            .addFilterBefore(
+                firebaseAuthFilter,
+                UsernamePasswordAuthenticationFilter.class
+            )
+
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/actuator/health", "/error").permitAll()
+
+                // Allow CORS preflight requests.
+                .requestMatchers(
+                    HttpMethod.OPTIONS, "/**"
+                ).permitAll()
+
+                // Public health and error endpoints.
+                .requestMatchers(
+                    "/actuator/health",
+                    "/error"
+                ).permitAll()
+
+                // Submission endpoints require a verified
+                // Firebase user.
+                .requestMatchers(
+                    "/api/submissions",
+                    "/api/submissions/**"
+                ).authenticated()
+
+                // Preserve the existing access behavior for
+                // other endpoints until their authorization
+                // requirements are reviewed.
                 .anyRequest().permitAll()
             );
 

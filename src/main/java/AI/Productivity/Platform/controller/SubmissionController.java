@@ -10,6 +10,7 @@ import AI.Productivity.Platform.service.SubmissionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import java.util.Map;
 
 import java.util.List;
 
@@ -92,4 +93,33 @@ public class SubmissionController {
                         ResponseEntity.notFound().build()
                 );
     }
+
+    @PutMapping("/{submissionId}")
+public ResponseEntity<SubmissionResponse> updateSubmission(
+        @PathVariable Long submissionId,
+        @RequestBody Map<String, String> body,
+        @RequestAttribute(
+                value = "uid",
+                required = false
+        ) String tokenUid
+) {
+    if (tokenUid == null || tokenUid.isBlank()) {
+        return ResponseEntity.status(
+                HttpStatus.UNAUTHORIZED
+        ).build();
+    }
+
+    String sourceCode = body == null
+            ? null
+            : body.get("sourceCode");
+
+    SubmissionResponse response =
+            submissionService.updateSubmission(
+                    submissionId,
+                    tokenUid,
+                    sourceCode
+            );
+
+    return ResponseEntity.ok(response);
+}
 }
