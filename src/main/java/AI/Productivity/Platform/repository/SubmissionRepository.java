@@ -2,6 +2,7 @@
 package AI.Productivity.Platform.repository;
 
 import AI.Productivity.Platform.entity.Submission;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,9 +15,10 @@ public interface SubmissionRepository
     @Query("""
         SELECT s
         FROM Submission s
-        WHERE s.user.id = :userId
+        WHERE s.user.firebaseUid = :firebaseUid
+        ORDER BY s.submissionId DESC
         """)
-    List<Submission> findByUserId(
-            @Param("userId") String userId
+    List<Submission> findByFirebaseUid(
+            @Param("firebaseUid") String firebaseUid
     );
 }

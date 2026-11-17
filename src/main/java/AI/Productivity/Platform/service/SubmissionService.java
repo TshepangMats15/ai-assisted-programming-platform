@@ -8,7 +8,6 @@ import AI.Productivity.Platform.repository.SubmissionRepository;
 
 import com.devmate.Entities.Users;
 import com.devmate.Entities.Assessment;
-
 import com.devmate.Repository.UserRepository;
 import com.devmate.Repository.AssessmentRepository;
 
@@ -36,68 +35,52 @@ public class SubmissionService {
         this.assessmentRepository = assessmentRepository;
     }
 
+    // CREATE A NEW SUBMISSION
     @Transactional
     public SubmissionResponse processSubmission(
-            String userId,
+            String firebaseUid,
             SubmissionRequest request
     ) {
-
-        // 1. Validate the authenticated user.
-        if (userId == null || userId.isBlank()) {
+        if (firebaseUid == null || firebaseUid.isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
-                    "Authenticated user is required."
+                    "Authentication required."
             );
         }
 
-        // 2. Validate the submission request.
-        if (request == null) {
+        if (request == null
+                || request.assessmentId() == null
+                || request.sourceCode() == null
+                || request.sourceCode().isBlank()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Submission request is required."
+                    "Assessment ID and source code are required."
             );
         }
 
-        if (request.assessmentId() == null) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Assessment ID is required."
-            );
-        }
-
-        if (request.sourceCode() == null ||
-                request.sourceCode().isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Source code cannot be empty."
-            );
-        }
-
-        // 3. Find the actual authenticated user.
-        // Assumes Users.id stores the Firebase UID.
-        Users user = userRepository.findById(userId)
+        // Find the student using their Firebase UID.
+        Users user = userRepository
+                .findByFirebaseUid(firebaseUid)
                 .orElseThrow(() ->
                         new ResponseStatusException(
                                 HttpStatus.NOT_FOUND,
-                                "Student account not found."
+                                "Student account not found in MySQL."
                         )
                 );
 
-        // 4. Find the requested assessment.
-        Integer assessmentId = request.assessmentId();
+        // Find the assessment.
+        Assessment assessment = assessmentRepository
+                .findById(request.assessmentId())
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Assessment not found."
+                        )
+                );
 
-        Assessment assessment =
-                assessmentRepository.findById(assessmentId)
-                        .orElseThrow(() ->
-                                new ResponseStatusException(
-                                        HttpStatus.NOT_FOUND,
-                                        "Assessment not found."
-                                )
-                        );
-
-        // 5. Save the submission without a fabricated score.
         LocalDateTime now = LocalDateTime.now();
 
+        // JPA stores the related user's internal SQL ID.
         Submission submission = new Submission(
                 user,
                 assessment,
@@ -109,61 +92,64 @@ public class SubmissionService {
         Submission savedSubmission =
                 submissionRepository.save(submission);
 
-        // Results must be created by trusted grading logic.
-        // Do not automatically assign 100%.
-        // Do not trust a score supplied by the student app.
-
-        // 6. Return the saved submission details.
         return new SubmissionResponse(
                 savedSubmission.getSubmissionId(),
                 "Code successfully submitted.",
                 now
         );
     }
+
+    // UPDATE AN EXISTING SUBMISSION
     @Transactional
-public SubmissionResponse updateSubmission(
-        Long submissionId,
-        String firebaseUid,
-        String sourceCode
-) {
-    if (firebaseUid == null || firebaseUid.isBlank()) {
-        throw new ResponseStatusException(
-                HttpStatus.UNAUTHORIZED,
-                "Authentication required."
+    public SubmissionResponse updateSubmission(
+            Long submissionId,
+            String firebaseUid,
+            String sourceCode
+    ) {
+        if (firebaseUid == null || firebaseUid.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication required."
+            );
+        }
+
+        if (sourceCode == null || sourceCode.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Source code cannot be empty."
+            );
+        }
+
+        Submission submission = submissionRepository
+                .findById(submissionId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Submission not found."
+                        )
+                );
+
+        // Only the original owner can edit this submission.
+        if (submission.getUser() == null
+                || !firebaseUid.equals(
+                        submission.getUser().getFirebaseUid()
+                )) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You cannot edit another student's submission."
+            );
+        }
+
+        // Update the existing record, not create a new one.
+        submission.setSourceCode(sourceCode);
+
+        Submission savedSubmission =
+                submissionRepository.save(submission);
+
+        return new SubmissionResponse(
+                savedSubmission.getSubmissionId(),
+                "Code changes saved successfully.",
+                LocalDateTime.now()
         );
     }
-
-    if (sourceCode == null || sourceCode.isBlank()) {
-        throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Source code cannot be empty."
-        );
-    }
-
-    Submission submission = submissionRepository
-            .findById(submissionId)
-            .orElseThrow(() -> new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
-                    "Submission not found."
-            ));
-
-    if (!firebaseUid.equals(
-            submission.getUser().getFirebaseUid()
-    )) {
-        throw new ResponseStatusException(
-                HttpStatus.FORBIDDEN,
-                "You cannot edit another student's submission."
-        );
-    }
-
-    submission.setSourceCode(sourceCode);
-
-    Submission saved = submissionRepository.save(submission);
-
-    return new SubmissionResponse(
-            saved.getSubmissionId(),
-            "Code changes saved successfully.",
-            LocalDateTime.now()
-    );
-}
 }

@@ -5,6 +5,10 @@ import com.devmate.Entities.Users;
 import com.devmate.Repository.UserRepository;
 import com.devmate.Services.UserServices;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.UserRecord;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -41,34 +45,96 @@ public class UserController {
     // SYNC FIREBASE USER WITH MYSQL
     @PostMapping("/sync")
     public ResponseEntity<Void> syncUser(
-            @RequestAttribute(
-                    value = "uid",
+            @RequestHeader(
+                    value = "Authorization",
                     required = false
-            ) String firebaseUid
-    ) {
+            ) String authorizationHeader
+    ) throws FirebaseAuthException {
 
-        // The UID must come from FirebaseAuthFilter,
-        // after successful Firebase token verification.
-        if (firebaseUid == null || firebaseUid.isBlank()) {
+        // Require a Firebase ID token.
+        if (authorizationHeader == null
+                || !authorizationHeader.startsWith("Bearer ")) {
+
             return ResponseEntity
                     .status(HttpStatus.UNAUTHORIZED)
                     .build();
         }
 
-        // Existing users remain unchanged.
+        String idToken = authorizationHeader
+                .substring(7)
+                .trim();
+
+        if (idToken.isEmpty()) {
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .build();
+        }
+
+        // Verify the Firebase token.
+        String firebaseUid;
+
+        try {
+            firebaseUid = FirebaseAuth.getInstance()
+                    .verifyIdToken(idToken)
+                    .getUid();
+
+        } catch (FirebaseAuthException e) {
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .build();
+        }
+
+        // Preserve existing SQL users and their roles.
         if (userRepository.findByFirebaseUid(firebaseUid)
                 .isPresent()) {
+
             return ResponseEntity.ok().build();
         }
 
-        // Create the missing SQL user.
+        // Retrieve the user's Firebase profile.
+        UserRecord firebaseUser = FirebaseAuth.getInstance()
+                .getUser(firebaseUid);
+
+        String email = firebaseUser.getEmail();
+
+        // Email is mandatory in the Users entity.
+        if (email == null || email.isBlank()) {
+            return ResponseEntity
+                    .badRequest()
+                    .build();
+        }
+
+        // Prevent duplicate email conflicts.
+        if (userRepository.existsByEmail(email)) {
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .build();
+        }
+
+        // Create the MySQL user.
         Users user = new Users();
+
         user.setFirebaseUid(firebaseUid);
+        user.setEmail(email);
 
-        // Do not assign administrator privileges.
-        // Other required user fields must be populated
-        // according to the Users entity and database schema.
+        String displayName = firebaseUser.getDisplayName();
 
+        user.setFullName(
+                displayName != null && !displayName.isBlank()
+                        ? displayName
+                        : email
+        );
+
+        // All newly synchronized users are students.
+        user.setRole(Users.Role.STUDENT.name());
+
+        // Firebase manages passwords.
+        user.setPassword(null);
+
+        // Optional activity timestamp.
+        user.setLastActive(null);
+
+        // The Users entity automatically generates UserID.
         userRepository.save(user);
 
         return ResponseEntity
@@ -79,17 +145,19 @@ public class UserController {
     // GET ALL USERS
     @GetMapping
     public ResponseEntity<List<Users>> getAllUsers() {
-        return ResponseEntity.ok(
-                userServices.getAllUsers()
-        );
+
+        List<Users> users = userServices.getAllUsers();
+
+        return ResponseEntity.ok(users);
     }
 
-    // GET ACTIVE USERS (ADMIN SCREEN)
+    // GET ACTIVE USERS
     @GetMapping("/active")
     public ResponseEntity<List<Users>> getActiveUsers() {
-        return ResponseEntity.ok(
-                userServices.getActiveUsers()
-        );
+
+        List<Users> users = userServices.getActiveUsers();
+
+        return ResponseEntity.ok(users);
     }
 
     // GET USER BY ID
@@ -97,9 +165,10 @@ public class UserController {
     public ResponseEntity<Users> getUserById(
             @PathVariable String userID
     ) {
-        return ResponseEntity.ok(
-                userServices.getUserById(userID)
-        );
+
+        Users user = userServices.getUserById(userID);
+
+        return ResponseEntity.ok(user);
     }
 
     // UPDATE USER
@@ -108,19 +177,28 @@ public class UserController {
             @PathVariable String userID,
             @RequestBody Users user
     ) {
-        return ResponseEntity.ok(
-                userServices.updateUser(userID, user)
+
+        Users updatedUser = userServices.updateUser(
+                userID,
+                user
         );
+
+        return ResponseEntity.ok(updatedUser);
     }
 
-    // HEARTBEAT
+    // UPDATE USER ACTIVITY
     @PutMapping("/{userID}/heartbeat")
     public ResponseEntity<Void> heartbeat(
             @PathVariable String userID
     ) {
-        return userServices.markActive(userID)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+
+        boolean updated = userServices.markActive(userID);
+
+        if (!updated) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.noContent().build();
     }
 
     // DELETE USER
@@ -128,6 +206,7 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(
             @PathVariable String userID
     ) {
+
         userServices.deleteUser(userID);
 
         return ResponseEntity.noContent().build();

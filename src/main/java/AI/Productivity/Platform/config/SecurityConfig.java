@@ -27,10 +27,10 @@ public class SecurityConfig {
             throws Exception {
 
         http
-            // Keep the existing CORS configuration.
+            // Preserve existing CORS configuration.
             .cors(Customizer.withDefaults())
 
-            // Stateless REST API: no CSRF sessions.
+            // Stateless REST API.
             .csrf(AbstractHttpConfigurer::disable)
 
             .sessionManagement(session ->
@@ -39,8 +39,7 @@ public class SecurityConfig {
                 )
             )
 
-            // Firebase token verification runs before Spring's
-            // username/password authentication filter.
+            // Verify Firebase tokens before authentication.
             .addFilterBefore(
                 firebaseAuthFilter,
                 UsernamePasswordAuthenticationFilter.class
@@ -50,7 +49,8 @@ public class SecurityConfig {
 
                 // Allow CORS preflight requests.
                 .requestMatchers(
-                    HttpMethod.OPTIONS, "/**"
+                    HttpMethod.OPTIONS,
+                    "/**"
                 ).permitAll()
 
                 // Public health and error endpoints.
@@ -59,16 +59,19 @@ public class SecurityConfig {
                     "/error"
                 ).permitAll()
 
-                // Submission endpoints require a verified
-                // Firebase user.
+                // Require Firebase authentication for submissions.
                 .requestMatchers(
                     "/api/submissions",
                     "/api/submissions/**"
                 ).authenticated()
 
-                // Preserve the existing access behavior for
-                // other endpoints until their authorization
-                // requirements are reviewed.
+                // Require Firebase authentication for results.
+                .requestMatchers(
+                    "/api/results",
+                    "/api/results/**"
+                ).authenticated()
+
+                // Preserve existing behavior for other endpoints.
                 .anyRequest().permitAll()
             );
 

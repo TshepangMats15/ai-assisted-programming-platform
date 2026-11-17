@@ -277,40 +277,49 @@ public class CoderunServices {
         );
     }
 
-    private Map<String, Object> formatResult(
+    
+private Map<String, Object> formatResult(
         Map<String, Object> body
-    ) {
-        String statusText = "Unknown";
+) {
+    String statusText = "Unknown";
+    Object statusId = null;
 
-        Object status = body.get("status");
+    Object status = body.get("status");
 
-        if (status instanceof Map<?, ?> statusMap) {
-            Object description = statusMap.get("description");
+    if (status instanceof Map<?, ?> statusMap) {
+        Object description = statusMap.get("description");
 
-            if (description != null) {
-                statusText = String.valueOf(description);
-            }
+        if (description != null) {
+            statusText = String.valueOf(description);
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-
-        result.put("stdout", clip(body.get("stdout")));
-        result.put("stderr", clip(body.get("stderr")));
-        result.put(
-            "compileOutput",
-            clip(body.get("compile_output"))
-        );
-        result.put("status", statusText);
-        result.put(
-            "time",
-            body.get("time") == null
-                ? ""
-                : String.valueOf(body.get("time"))
-        );
-        result.put("memory", body.get("memory"));
-
-        return result;
+        statusId = statusMap.get("id");
     }
+
+    Map<String, Object> result = new LinkedHashMap<>();
+
+    result.put("stdout", clip(body.get("stdout")));
+    result.put("stderr", clip(body.get("stderr")));
+    result.put(
+        "compileOutput",
+        clip(body.get("compile_output"))
+    );
+    result.put("status", statusText);
+
+    // Required for automatic grading
+    result.put("statusId", statusId);
+
+    result.put(
+        "time",
+        body.get("time") == null
+            ? ""
+            : String.valueOf(body.get("time"))
+    );
+    result.put("memory", body.get("memory"));
+
+    return result;
+}
+
 
     private static String clip(Object value) {
         String text = value == null

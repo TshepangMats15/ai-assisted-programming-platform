@@ -1,6 +1,8 @@
+
 package AI.Productivity.Platform.entity;
 
 import jakarta.persistence.*;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -13,31 +15,43 @@ public class Submission {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "submissionID")
+    @Column(name = "submissionid")
     private Long submissionId;
 
     @ManyToOne
-    @JoinColumn(name = "userID", nullable = false)
+    @JoinColumn(
+            name = "userid",
+            referencedColumnName = "userid",
+            nullable = false
+    )
     private Users user;
 
     @ManyToOne
-    @JoinColumn(name = "assessmentID", nullable = false)
+    @JoinColumn(
+            name = "assessmentid",
+            nullable = false
+    )
     private Assessment assessment;
 
-    @Column(name = "sourceCode", columnDefinition = "TEXT")
+    @Column(name = "source_code", columnDefinition = "TEXT")
     private String sourceCode;
 
-    @Column(name = "SubmissionTime")
+    @Column(name = "submission_time")
     private LocalDateTime submissionTime;
 
     @Column(name = "score", precision = 10, scale = 2)
     private BigDecimal score;
 
-    // Constructors
     public Submission() {
     }
 
-    public Submission(Users user, Assessment assessment, String sourceCode, LocalDateTime submissionTime, BigDecimal score) {
+    public Submission(
+            Users user,
+            Assessment assessment,
+            String sourceCode,
+            LocalDateTime submissionTime,
+            BigDecimal score
+    ) {
         this.user = user;
         this.assessment = assessment;
         this.sourceCode = sourceCode;
@@ -45,7 +59,6 @@ public class Submission {
         this.score = score;
     }
 
-    // Getters and Setters
     public Long getSubmissionId() {
         return submissionId;
     }

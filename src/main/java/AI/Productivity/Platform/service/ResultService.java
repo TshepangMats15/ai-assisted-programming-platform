@@ -1,36 +1,82 @@
+
 package AI.Productivity.Platform.service;
 
-import AI.Productivity.Platform.dto.ResultRequest;
-import AI.Productivity.Platform.dto.ResultResponse;
 import AI.Productivity.Platform.entity.Result;
 import AI.Productivity.Platform.repository.ResultRepository;
-import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import com.devmate.Entities.Users;
+import com.devmate.Repository.UserRepository;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Service
 public class ResultService {
 
     private final ResultRepository resultRepository;
+    private final UserRepository userRepository;
 
-    public ResultService(ResultRepository resultRepository) {
+    public ResultService(
+            ResultRepository resultRepository,
+            UserRepository userRepository
+    ) {
         this.resultRepository = resultRepository;
+        this.userRepository = userRepository;
     }
 
-    public ResultResponse saveResult(ResultRequest request) {
-        LocalDateTime now = LocalDateTime.now();
+    // GET RESULTS BELONGING TO THE AUTHENTICATED STUDENT
+    public List<Result> getMyResults(String firebaseUid) {
 
-        // Creating the result using the exact flat fields from the updated Result entity
-        Result result = new Result(
-                request.userId(),
-                request.assessmentId(),
-                request.score(),
-                request.completionTime(),
-                request.aiUsage(),
-                now
+        Users user = requireUser(firebaseUid);
+
+        return resultRepository.findByUserId(
+                user.getId()
         );
+    }
 
-        Result savedResult = resultRepository.save(result);
-        return new ResultResponse(savedResult.getResultId(), "Result successfully saved.", now);
+    // GET ONE STUDENT'S RESULTS FOR A SPECIFIC ASSESSMENT
+    public List<Result> getMyAssessmentResults(
+            String firebaseUid,
+            Integer assessmentId
+    ) {
+        Users user = requireUser(firebaseUid);
+
+        if (assessmentId == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Assessment ID is required."
+            );
+        }
+
+        return resultRepository.findByUserId(
+                user.getId()
+        ).stream()
+         .filter(result ->
+                 assessmentId.equals(result.getAssessmentId())
+         )
+         .toList();
+    }
+
+    // RESOLVE FIREBASE UID TO INTERNAL MYSQL USER ID
+    private Users requireUser(String firebaseUid) {
+
+        if (firebaseUid == null || firebaseUid.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication required."
+            );
+        }
+
+        return userRepository
+                .findByFirebaseUid(firebaseUid)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Student account not found."
+                        )
+                );
     }
 }
