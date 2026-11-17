@@ -37,11 +37,16 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
                             FirebaseAuth.getInstance()
                                     .verifyIdToken(idToken);
 
-                    // Authentication only.
-                    // Admin roles must be assigned and verified separately.
+                    String firebaseUid = decodedToken.getUid();
+
+                    // Pass the verified Firebase UID to controllers.
+                    request.setAttribute("uid", firebaseUid);
+
+                    // Authenticate the user in Spring Security.
+                    // This does not assign administrator permissions.
                     var authentication =
                             new UsernamePasswordAuthenticationToken(
-                                    decodedToken.getUid(),
+                                    firebaseUid,
                                     null,
                                     List.of(
                                             new SimpleGrantedAuthority(
@@ -56,6 +61,9 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             }
         } catch (Exception e) {
             SecurityContextHolder.clearContext();
+
+            // Do not trust a UID when token verification fails.
+            request.removeAttribute("uid");
         }
 
         try {
