@@ -171,17 +171,35 @@ public class SecurityConfig {
     "/api/announcements/**"
 ).hasRole("ADMIN")
 
-                .requestMatchers(
-                    "/api/submissions",
-                    "/api/submissions/**"
-                ).hasRole("STUDENT")
+                // STUDENT SUBMISSION WORKFLOW
+.requestMatchers(
+    "/api/submissions",
+    "/api/submissions/**"
+).hasRole("STUDENT")
 
-                // STUDENT RESULTS
-                .requestMatchers(
-                    "/api/results",
-                    "/api/results/**"
-                ).hasRole("STUDENT")
+// RESULTS READ ACCESS
+.requestMatchers(
+    HttpMethod.GET,
+    "/api/results",
+    "/api/results/**"
+).hasAnyRole("STUDENT", "ADMIN")
 
+// PREVENT DIRECT RESULT MODIFICATION
+.requestMatchers(
+    "/api/results",
+    "/api/results/**"
+).denyAll()
+// ADMIN ANALYTICS
+.requestMatchers(
+    "/api/analytics",
+    "/api/analytics/**",
+    "/api/ai/interactions/**"
+).hasRole("ADMIN")
+
+// DISABLE LEGACY UNVERIFIED PROMPT ENDPOINT
+.requestMatchers(
+    "/api/ai/prompt"
+).denyAll()
                 // REQUIRE AUTHENTICATION FOR OTHER ENDPOINTS
                 .anyRequest().authenticated()
             );
