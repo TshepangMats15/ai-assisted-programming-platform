@@ -129,7 +129,7 @@ public class SecurityConfig {
                     "/api/question-test-cases/**",
                     "/api/questions/*/test-cases",
                     "/api/questions/*/test-cases/**",
-                    "/api/assessments/**/test-cases"
+                    "/api/assessments/*/test-cases"
                 ).hasRole("ADMIN")
 
                 // ALLOW AUTHENTICATED COURSEWORK READS
