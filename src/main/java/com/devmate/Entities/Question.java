@@ -1,43 +1,73 @@
+
 package com.devmate.Entities;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
-
 
 @Entity
 @Table(name = "questions")
-
 public class Question {
 
     @Id
-    @Column(name = "question_id", length = 255, nullable = false)
+    @Column(
+        name = "question_id",
+        length = 255,
+        nullable = false
+    )
     private String questionID;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assessmentid", nullable = false)
+    @JoinColumn(
+        name = "assessmentid",
+        nullable = false
+    )
     @JsonIgnore
     private Assessment assessment;
 
     @Column(name = "question_type", nullable = false)
-    private String questionType; // "MULTIPLE_CHOICE" or "CODING_CHALLENGE"
+    private String questionType;
 
-    @Column(name = "prompt", columnDefinition = "TEXT", nullable = false)
+    @Column(
+        name = "prompt",
+        columnDefinition = "TEXT",
+        nullable = false
+    )
     private String prompt;
 
-    @Column(name = "options_json", columnDefinition = "JSON")
+    @Column(
+        name = "options_json",
+        columnDefinition = "JSON"
+    )
     private String optionsJson;
 
-    @Column(name = "correct_answer", columnDefinition = "TEXT")
+    @JsonProperty(
+        access = JsonProperty.Access.WRITE_ONLY
+    )
+    @Column(
+        name = "correct_answer",
+        columnDefinition = "TEXT"
+    )
     private String correctAnswer;
 
-    @Column(name = "starter_code", columnDefinition = "TEXT")
+    @Column(
+        name = "starter_code",
+        columnDefinition = "TEXT"
+    )
     private String starterCode;
 
     public Question() {
     }
 
-    public Question(String questionID, Assessment assessment, String questionType, 
-                    String prompt, String optionsJson, String correctAnswer, String starterCode) {
+    public Question(
+            String questionID,
+            Assessment assessment,
+            String questionType,
+            String prompt,
+            String optionsJson,
+            String correctAnswer,
+            String starterCode
+    ) {
         this.questionID = questionID;
         this.assessment = assessment;
         this.questionType = questionType;

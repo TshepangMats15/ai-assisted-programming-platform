@@ -298,7 +298,19 @@ private Map<String, Object> formatResult(
 
     Map<String, Object> result = new LinkedHashMap<>();
 
-    result.put("stdout", clip(body.get("stdout")));
+    Object rawStdout = body.get("stdout");
+
+boolean stdoutTruncated =
+        rawStdout != null &&
+        String.valueOf(rawStdout).length()
+                > MAX_OUTPUT_CHARS;
+
+result.put("stdout", clip(rawStdout));
+
+result.put(
+        "stdoutTruncated",
+        stdoutTruncated
+);
     result.put("stderr", clip(body.get("stderr")));
     result.put(
         "compileOutput",

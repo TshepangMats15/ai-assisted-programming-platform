@@ -20,16 +20,16 @@ public class Submission {
 
     @ManyToOne
     @JoinColumn(
-            name = "userid",
-            referencedColumnName = "userid",
-            nullable = false
+        name = "userid",
+        referencedColumnName = "userid",
+        nullable = false
     )
     private Users user;
 
     @ManyToOne
     @JoinColumn(
-            name = "assessmentid",
-            nullable = false
+        name = "assessmentid",
+        nullable = false
     )
     private Assessment assessment;
 
@@ -42,21 +42,36 @@ public class Submission {
     @Column(name = "score", precision = 10, scale = 2)
     private BigDecimal score;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", length = 20)
+    private SubmissionStatus status;
+
+    @Column(name = "saved_at")
+    private LocalDateTime savedAt;
+
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    @Column(name = "graded_at")
+    private LocalDateTime gradedAt;
+
     public Submission() {
     }
 
     public Submission(
-            Users user,
-            Assessment assessment,
-            String sourceCode,
-            LocalDateTime submissionTime,
-            BigDecimal score
+        Users user,
+        Assessment assessment,
+        String sourceCode,
+        LocalDateTime submissionTime,
+        BigDecimal score
     ) {
         this.user = user;
         this.assessment = assessment;
         this.sourceCode = sourceCode;
         this.submissionTime = submissionTime;
         this.score = score;
+        this.status = SubmissionStatus.DRAFT;
+        this.savedAt = LocalDateTime.now();
     }
 
     public Long getSubmissionId() {
@@ -105,5 +120,37 @@ public class Submission {
 
     public void setScore(BigDecimal score) {
         this.score = score;
+    }
+
+    public SubmissionStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(SubmissionStatus status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getSavedAt() {
+        return savedAt;
+    }
+
+    public void setSavedAt(LocalDateTime savedAt) {
+        this.savedAt = savedAt;
+    }
+
+    public LocalDateTime getSubmittedAt() {
+        return submittedAt;
+    }
+
+    public void setSubmittedAt(LocalDateTime submittedAt) {
+        this.submittedAt = submittedAt;
+    }
+
+    public LocalDateTime getGradedAt() {
+        return gradedAt;
+    }
+
+    public void setGradedAt(LocalDateTime gradedAt) {
+        this.gradedAt = gradedAt;
     }
 }

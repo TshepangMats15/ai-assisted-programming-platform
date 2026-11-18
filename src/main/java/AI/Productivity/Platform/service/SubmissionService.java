@@ -4,6 +4,7 @@ package AI.Productivity.Platform.service;
 import AI.Productivity.Platform.dto.SubmissionRequest;
 import AI.Productivity.Platform.dto.SubmissionResponse;
 import AI.Productivity.Platform.entity.Submission;
+import AI.Productivity.Platform.entity.SubmissionStatus;
 import AI.Productivity.Platform.repository.SubmissionRepository;
 
 import com.devmate.Entities.Users;
@@ -11,12 +12,17 @@ import com.devmate.Entities.Assessment;
 import com.devmate.Repository.UserRepository;
 import com.devmate.Repository.AssessmentRepository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @Service
 public class SubmissionService {
@@ -24,51 +30,49 @@ public class SubmissionService {
     private final SubmissionRepository submissionRepository;
     private final UserRepository userRepository;
     private final AssessmentRepository assessmentRepository;
+    private final EntityManager entityManager;
 
     public SubmissionService(
             SubmissionRepository submissionRepository,
             UserRepository userRepository,
-            AssessmentRepository assessmentRepository
+            AssessmentRepository assessmentRepository,
+            EntityManager entityManager
     ) {
         this.submissionRepository = submissionRepository;
         this.userRepository = userRepository;
         this.assessmentRepository = assessmentRepository;
+        this.entityManager = entityManager;
     }
 
-    // CREATE A NEW SUBMISSION
+    // CREATE OR UPDATE A DRAFT
     @Transactional
     public SubmissionResponse processSubmission(
             String firebaseUid,
             SubmissionRequest request
     ) {
-        if (firebaseUid == null || firebaseUid.isBlank()) {
-            throw new ResponseStatusException(
-                    HttpStatus.UNAUTHORIZED,
-                    "Authentication required."
-            );
-        }
+        Users user = requireUser(firebaseUid);
 
-        if (request == null
-                || request.assessmentId() == null
-                || request.sourceCode() == null
-                || request.sourceCode().isBlank()) {
+        if (request == null ||
+                request.assessmentId() == null) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Assessment ID and source code are required."
+                    "Assessment ID is required."
             );
         }
 
-        // Find the student using their Firebase UID.
-        Users user = userRepository
-                .findByFirebaseUid(firebaseUid)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Student account not found in MySQL."
-                        )
-                );
+        String sourceCode = request.sourceCode();
 
-        // Find the assessment.
+        if (sourceCode != null) {
+            validateCode(sourceCode);
+        }
+
+        // Serialize draft creation for this student.
+        entityManager.lock(
+                user,
+                LockModeType.PESSIMISTIC_WRITE
+        );
+
         Assessment assessment = assessmentRepository
                 .findById(request.assessmentId())
                 .orElseThrow(() ->
@@ -78,50 +82,168 @@ public class SubmissionService {
                         )
                 );
 
+        List<Submission> drafts =
+                submissionRepository.findDrafts(
+                        firebaseUid,
+                        request.assessmentId(),
+                        SubmissionStatus.DRAFT
+                );
+
+        if (drafts.size() > 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Multiple drafts exist for this assessment."
+            );
+        }
+
         LocalDateTime now = LocalDateTime.now();
 
-        // JPA stores the related user's internal SQL ID.
-        Submission submission = new Submission(
-                user,
-                assessment,
-                request.sourceCode(),
-                now,
-                null
-        );
+        Submission submission;
 
-        Submission savedSubmission =
+        if (!drafts.isEmpty()) {
+
+            submission = requireOwnedSubmissionForUpdate(
+                    drafts.get(0).getSubmissionId(),
+                    firebaseUid
+            );
+
+            requireDraft(submission);
+
+            if (sourceCode != null) {
+                submission.setSourceCode(sourceCode);
+            }
+
+        } else {
+
+            submission = new Submission(
+                    user,
+                    assessment,
+                    sourceCode,
+                    now,
+                    null
+            );
+
+            submission.setStatus(
+                    SubmissionStatus.DRAFT
+            );
+        }
+
+        submission.setSavedAt(now);
+
+        Submission saved =
                 submissionRepository.save(submission);
 
         return new SubmissionResponse(
-                savedSubmission.getSubmissionId(),
-                "Code successfully submitted.",
+                saved.getSubmissionId(),
+                "Draft saved successfully.",
                 now
         );
     }
 
-    // UPDATE AN EXISTING SUBMISSION
+    // RETRIEVE AN EXISTING DRAFT
+    @Transactional(readOnly = true)
+    public Submission getDraft(
+            String firebaseUid,
+            Integer assessmentId
+    ) {
+        requireUser(firebaseUid);
+
+        List<Submission> drafts =
+                submissionRepository.findDrafts(
+                        firebaseUid,
+                        assessmentId,
+                        SubmissionStatus.DRAFT
+                );
+
+        if (drafts.isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "No saved draft found."
+            );
+        }
+
+        if (drafts.size() > 1) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Multiple drafts exist for this assessment."
+            );
+        }
+
+        return drafts.get(0);
+    }
+
+    // SAVE CHANGES TO EXISTING CODE
     @Transactional
     public SubmissionResponse updateSubmission(
             Long submissionId,
             String firebaseUid,
             String sourceCode
     ) {
-        if (firebaseUid == null || firebaseUid.isBlank()) {
+        requireUser(firebaseUid);
+        validateCode(sourceCode);
+
+        Submission submission =
+                requireOwnedSubmissionForUpdate(
+                        submissionId,
+                        firebaseUid
+                );
+
+        requireDraft(submission);
+
+        LocalDateTime now = LocalDateTime.now();
+
+        submission.setSourceCode(sourceCode);
+        submission.setSavedAt(now);
+
+        submissionRepository.save(submission);
+
+        return new SubmissionResponse(
+                submission.getSubmissionId(),
+                "Code saved successfully.",
+                now
+        );
+    }
+
+    // AUTHENTICATED STUDENT LOOKUP
+    private Users requireUser(String firebaseUid) {
+
+        if (firebaseUid == null ||
+                firebaseUid.isBlank()) {
+
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "Authentication required."
             );
         }
 
-        if (sourceCode == null || sourceCode.isBlank()) {
+        Users user = userRepository
+                .findByFirebaseUid(firebaseUid)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Student account not found."
+                        )
+                );
+
+        if (!firebaseUid.equals(user.getFirebaseUid())
+                || !"STUDENT".equals(user.getRole())) {
+
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Source code cannot be empty."
+                    HttpStatus.FORBIDDEN,
+                    "Student access required."
             );
         }
 
+        return user;
+    }
+
+    // LOAD AND LOCK THE STUDENT'S SUBMISSION
+    private Submission requireOwnedSubmissionForUpdate(
+            Long submissionId,
+            String firebaseUid
+    ) {
         Submission submission = submissionRepository
-                .findById(submissionId)
+                .findByIdForUpdate(submissionId)
                 .orElseThrow(() ->
                         new ResponseStatusException(
                                 HttpStatus.NOT_FOUND,
@@ -129,27 +251,54 @@ public class SubmissionService {
                         )
                 );
 
-        // Only the original owner can edit this submission.
-        if (submission.getUser() == null
-                || !firebaseUid.equals(
+        if (submission.getUser() == null ||
+                !firebaseUid.equals(
                         submission.getUser().getFirebaseUid()
                 )) {
+
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
-                    "You cannot edit another student's submission."
+                    "You do not own this submission."
             );
         }
 
-        // Update the existing record, not create a new one.
-        submission.setSourceCode(sourceCode);
+        return submission;
+    }
 
-        Submission savedSubmission =
-                submissionRepository.save(submission);
+    // ONLY DRAFTS MAY BE EDITED
+    private void requireDraft(Submission submission) {
 
-        return new SubmissionResponse(
-                savedSubmission.getSubmissionId(),
-                "Code changes saved successfully.",
-                LocalDateTime.now()
-        );
+        if (submission.getStatus() !=
+                SubmissionStatus.DRAFT) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This submission is locked and cannot be edited."
+            );
+        }
+    }
+
+    // VALIDATE SOURCE CODE
+    private void validateCode(String sourceCode) {
+
+        if (sourceCode == null ||
+                sourceCode.isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Source code cannot be empty."
+            );
+        }
+
+        if (sourceCode.length() > 50_000 ||
+                sourceCode.getBytes(
+                        StandardCharsets.UTF_8
+                ).length > 65_535) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Source code exceeds the maximum size."
+            );
+        }
     }
 }

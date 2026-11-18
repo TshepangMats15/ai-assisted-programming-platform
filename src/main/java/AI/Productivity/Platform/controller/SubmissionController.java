@@ -3,11 +3,12 @@ package AI.Productivity.Platform.controller;
 
 import AI.Productivity.Platform.dto.SubmissionRequest;
 import AI.Productivity.Platform.dto.SubmissionResponse;
-import AI.Productivity.Platform.dto.GradeSubmissionRequest;
 import AI.Productivity.Platform.dto.ResultResponse;
 
 import AI.Productivity.Platform.entity.Submission;
+
 import AI.Productivity.Platform.repository.SubmissionRepository;
+
 import AI.Productivity.Platform.service.SubmissionService;
 import AI.Productivity.Platform.service.GradingService;
 
@@ -37,9 +38,9 @@ public class SubmissionController {
         this.gradingService = gradingService;
     }
 
-    // CREATE A NEW SUBMISSION
-    @PostMapping
-    public ResponseEntity<SubmissionResponse> submitCode(
+    // CREATE OR SAVE A DRAFT
+    @PostMapping({"", "/draft"})
+    public ResponseEntity<SubmissionResponse> saveDraft(
             @RequestBody SubmissionRequest request,
             @RequestAttribute(
                     value = "uid",
@@ -48,26 +49,34 @@ public class SubmissionController {
     ) {
         String firebaseUid = requireUid(tokenUid);
 
-        if (request == null
-                || request.assessmentId() == null
-                || request.sourceCode() == null
-                || request.sourceCode().isBlank()) {
-
-            return ResponseEntity.badRequest().build();
-        }
-
-        SubmissionResponse response =
+        return ResponseEntity.ok(
                 submissionService.processSubmission(
                         firebaseUid,
                         request
-                );
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(response);
+                )
+        );
     }
 
-    // GET ONLY THE LOGGED-IN STUDENT'S SUBMISSIONS
+    // RETRIEVE SAVED DRAFT BY ASSESSMENT
+    @GetMapping("/draft/{assessmentId}")
+    public ResponseEntity<Submission> getDraft(
+            @PathVariable Integer assessmentId,
+            @RequestAttribute(
+                    value = "uid",
+                    required = false
+            ) String tokenUid
+    ) {
+        String firebaseUid = requireUid(tokenUid);
+
+        return ResponseEntity.ok(
+                submissionService.getDraft(
+                        firebaseUid,
+                        assessmentId
+                )
+        );
+    }
+
+    // GET THE AUTHENTICATED STUDENT'S SUBMISSIONS
     @GetMapping
     public ResponseEntity<List<Submission>> getAllSubmissions(
             @RequestAttribute(
@@ -78,14 +87,21 @@ public class SubmissionController {
         String firebaseUid = requireUid(tokenUid);
 
         return ResponseEntity.ok(
-                submissionRepository.findByFirebaseUid(
-                        firebaseUid
-                )
+                submissionRepository
+                        .findByFirebaseUid(firebaseUid)
+                        .stream()
+                        .filter(submission ->
+                                submission.getUser() != null &&
+                                firebaseUid.equals(
+                                        submission.getUser()
+                                                .getFirebaseUid()
+                                )
+                        )
+                        .toList()
         );
     }
 
-    // GET SUBMISSIONS BY FIREBASE UID
-    // STUDENTS CANNOT REQUEST ANOTHER USER'S RECORDS
+    // COMPATIBILITY ENDPOINT
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<Submission>> getUserSubmissions(
             @PathVariable String userId,
@@ -97,20 +113,17 @@ public class SubmissionController {
         String firebaseUid = requireUid(tokenUid);
 
         if (!firebaseUid.equals(userId)) {
-            return ResponseEntity
-                    .status(HttpStatus.FORBIDDEN)
-                    .build();
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You cannot view another student's submissions."
+            );
         }
 
-        return ResponseEntity.ok(
-                submissionRepository.findByFirebaseUid(
-                        firebaseUid
-                )
-        );
+        return getAllSubmissions(tokenUid);
     }
 
     // GET ONE SUBMISSION
-    // VERIFY THAT THE STUDENT OWNS IT
     @GetMapping("/{submissionId}")
     public ResponseEntity<Submission> getSubmissionById(
             @PathVariable Long submissionId,
@@ -130,8 +143,8 @@ public class SubmissionController {
                         )
                 );
 
-        if (submission.getUser() == null
-                || !firebaseUid.equals(
+        if (submission.getUser() == null ||
+                !firebaseUid.equals(
                         submission.getUser().getFirebaseUid()
                 )) {
 
@@ -144,9 +157,11 @@ public class SubmissionController {
         return ResponseEntity.ok(submission);
     }
 
-    // UPDATE AN EXISTING SUBMISSION
-    // THE SAME MYSQL ROW IS UPDATED
-    @PutMapping("/{submissionId}")
+    // UPDATE SAVED CODE
+    @PutMapping({
+            "/{submissionId}",
+            "/{submissionId}/code"
+    })
     public ResponseEntity<SubmissionResponse> updateSubmission(
             @PathVariable Long submissionId,
             @RequestBody Map<String, String> body,
@@ -161,22 +176,19 @@ public class SubmissionController {
                 ? null
                 : body.get("sourceCode");
 
-        SubmissionResponse response =
+        return ResponseEntity.ok(
                 submissionService.updateSubmission(
                         submissionId,
                         firebaseUid,
                         sourceCode
-                );
-
-        return ResponseEntity.ok(response);
+                )
+        );
     }
 
-    // AUTOMATICALLY GRADE A SAVED SUBMISSION
-    // CODING: 50% | MULTIPLE CHOICE: 50%
+    // AUTOMATICALLY GRADE A FINALISED ASSESSMENT
     @PostMapping("/{submissionId}/grade")
     public ResponseEntity<ResultResponse> gradeSubmission(
             @PathVariable Long submissionId,
-            @RequestBody GradeSubmissionRequest request,
             @RequestAttribute(
                     value = "uid",
                     required = false
@@ -187,17 +199,17 @@ public class SubmissionController {
         ResultResponse response =
                 gradingService.gradeSubmission(
                         submissionId,
-                        firebaseUid,
-                        request
+                        firebaseUid
                 );
 
         return ResponseEntity.ok(response);
     }
 
-    // REQUIRE A VERIFIED FIREBASE UID
+    // REQUIRE VERIFIED FIREBASE AUTHENTICATION
     private String requireUid(String tokenUid) {
 
         if (tokenUid == null || tokenUid.isBlank()) {
+
             throw new ResponseStatusException(
                     HttpStatus.UNAUTHORIZED,
                     "Authentication required."

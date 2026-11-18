@@ -33,11 +33,8 @@ public class SecurityConfig {
     ) throws Exception {
 
         http
-
-            // Preserve existing CORS configuration.
             .cors(Customizer.withDefaults())
 
-            // Stateless REST API.
             .csrf(AbstractHttpConfigurer::disable)
 
             .sessionManagement(session ->
@@ -46,11 +43,9 @@ public class SecurityConfig {
                 )
             )
 
-            // Disable default authentication mechanisms.
             .formLogin(AbstractHttpConfigurer::disable)
             .httpBasic(AbstractHttpConfigurer::disable)
 
-            // Return 401 for unauthenticated requests.
             .exceptionHandling(exception ->
                 exception.authenticationEntryPoint(
                     new HttpStatusEntryPoint(
@@ -59,7 +54,6 @@ public class SecurityConfig {
                 )
             )
 
-            // Verify Firebase ID tokens.
             .addFilterBefore(
                 firebaseAuthFilter,
                 UsernamePasswordAuthenticationFilter.class
@@ -67,83 +61,122 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
 
-                // Allow CORS preflight requests.
+                // CORS PREFLIGHT
                 .requestMatchers(
                     HttpMethod.OPTIONS,
                     "/**"
                 ).permitAll()
 
-                // Public health and error endpoints.
+                // PUBLIC HEALTH ENDPOINTS
                 .requestMatchers(
                     "/actuator/health",
                     "/error"
                 ).permitAll()
 
-                // Synchronize authenticated Firebase users.
+                // FIREBASE ACCOUNT SYNCHRONIZATION
                 .requestMatchers(
                     HttpMethod.POST,
                     "/api/users/sync"
                 ).authenticated()
 
-                // Only administrators can list users.
+                // ADMIN USER MANAGEMENT
                 .requestMatchers(
                     HttpMethod.GET,
                     "/api/users",
                     "/api/users/active"
                 ).hasRole("ADMIN")
 
-                // User profile access.
-                // Ownership is checked in UserController.
+                // USER PROFILE ACCESS
                 .requestMatchers(
                     HttpMethod.GET,
                     "/api/users/*"
                 ).authenticated()
 
-                // User activity heartbeat.
-                // Ownership is checked in UserController.
+                // USER HEARTBEAT
                 .requestMatchers(
                     HttpMethod.PUT,
                     "/api/users/*/heartbeat"
                 ).authenticated()
 
-                // Only administrators can update users.
+                // ADMIN USER UPDATES
                 .requestMatchers(
                     HttpMethod.PUT,
                     "/api/users/*"
                 ).hasRole("ADMIN")
 
-                // Only administrators can delete users.
                 .requestMatchers(
                     HttpMethod.DELETE,
                     "/api/users/*"
                 ).hasRole("ADMIN")
 
-                // Deny all other user endpoints.
+                // DENY UNRECOGNIZED USER ENDPOINTS
                 .requestMatchers(
                     "/api/users",
                     "/api/users/**"
                 ).denyAll()
 
-                // Protect submissions.
+                // ADMIN ENDPOINTS
+                .requestMatchers(
+                    "/api/admin",
+                    "/api/admin/**"
+                ).hasRole("ADMIN")
+
+                // HIDDEN QUESTION TEST CASES
+                .requestMatchers(
+                    "/api/test-cases",
+                    "/api/test-cases/**",
+                    "/api/question-test-cases",
+                    "/api/question-test-cases/**",
+                    "/api/questions/*/test-cases",
+                    "/api/questions/*/test-cases/**",
+                    "/api/assessments/**/test-cases"
+                ).hasRole("ADMIN")
+
+                // ALLOW AUTHENTICATED COURSEWORK READS
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/api/assessments",
+                    "/api/assessments/**",
+                    "/api/coursework",
+                    "/api/coursework/**",
+                    "/api/lessons",
+                    "/api/lessons/**",
+                    "/api/questions",
+                    "/api/questions/**"
+                ).hasAnyRole("STUDENT", "ADMIN")
+
+                // ONLY ADMINS MAY MODIFY LEARNING CONTENT
+                .requestMatchers(
+                    "/api/assessments",
+                    "/api/assessments/**",
+                    "/api/coursework",
+                    "/api/coursework/**",
+                    "/api/lessons",
+                    "/api/lessons/**",
+                    "/api/questions",
+                    "/api/questions/**"
+                ).hasRole("ADMIN")
+
+                // STUDENT SUBMISSION WORKFLOW
                 .requestMatchers(
                     "/api/submissions",
                     "/api/submissions/**"
-                ).authenticated()
+                ).hasRole("STUDENT")
 
-                // Protect assessment results.
+                // STUDENT RESULTS
                 .requestMatchers(
                     "/api/results",
                     "/api/results/**"
-                ).authenticated()
+                ).hasRole("STUDENT")
 
-                // Preserve other existing endpoints.
-                .anyRequest().permitAll()
+                // REQUIRE AUTHENTICATION FOR OTHER ENDPOINTS
+                .anyRequest().authenticated()
             );
 
         return http.build();
     }
 
-    // Prevent duplicate servlet filter registration.
+    // PREVENT DUPLICATE FILTER REGISTRATION
     @Bean
     public FilterRegistrationBean<FirebaseAuthFilter>
             firebaseAuthFilterRegistration(
