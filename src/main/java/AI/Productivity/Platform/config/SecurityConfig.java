@@ -158,6 +158,19 @@ public class SecurityConfig {
                 ).hasRole("ADMIN")
 
                 // STUDENT SUBMISSION WORKFLOW
+                // ANNOUNCEMENT READ ACCESS
+.requestMatchers(
+    HttpMethod.GET,
+    "/api/announcements",
+    "/api/announcements/**"
+).hasAnyRole("STUDENT", "ADMIN")
+
+// ONLY ADMINS MAY MODIFY ANNOUNCEMENTS
+.requestMatchers(
+    "/api/announcements",
+    "/api/announcements/**"
+).hasRole("ADMIN")
+
                 .requestMatchers(
                     "/api/submissions",
                     "/api/submissions/**"

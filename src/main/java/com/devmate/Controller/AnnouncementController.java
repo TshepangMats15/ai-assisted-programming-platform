@@ -7,74 +7,150 @@ import com.devmate.Repository.AnnouncementRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/announcements")
-
 public class AnnouncementController {
 
     private final AnnouncementRepository announcementRepository;
 
-    public AnnouncementController(AnnouncementRepository announcementRepository) {
+    public AnnouncementController(
+            AnnouncementRepository announcementRepository) {
+
         this.announcementRepository = announcementRepository;
     }
 
-    // GET: Retrieve all announcements
+    public record AnnouncementRequest(
+            String title,
+            String message
+    ) {}
+
+    // Retrieve global announcements
     @GetMapping
     public ResponseEntity<List<Announcement>> getAll() {
-        return ResponseEntity.ok(announcementRepository.findAll());
+
+        return ResponseEntity.ok(
+                announcementRepository
+                        .findByAudienceOrderByCreatedAtDescIdDesc(
+                                Announcement.GLOBAL_AUDIENCE
+                        )
+        );
     }
 
-    // POST: Create a new announcement
+    // Create a global announcement
     @PostMapping
     public ResponseEntity<Announcement> create(
-            @RequestBody Announcement announcement) {
+            @RequestBody AnnouncementRequest request) {
+
+        validateRequest(request);
+
+        Announcement announcement = new Announcement(
+                request.title().trim(),
+                request.message().trim()
+        );
 
         Announcement savedAnnouncement =
                 announcementRepository.save(announcement);
 
-        return ResponseEntity.status(HttpStatus.CREATED)
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
                 .body(savedAnnouncement);
     }
 
-    // PUT: Update an existing announcement
+    // Update an existing announcement
     @PutMapping("/{id}")
     public ResponseEntity<Announcement> update(
             @PathVariable Long id,
-            @RequestBody Announcement updatedAnnouncement) {
+            @RequestBody AnnouncementRequest request) {
 
-        return announcementRepository.findById(id)
-                .map(existingAnnouncement -> {
+        validateRequest(request);
 
-                    existingAnnouncement.setTitle(
-                            updatedAnnouncement.getTitle());
+        Announcement existingAnnouncement =
+                announcementRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Announcement not found."
+                                )
+                        );
 
-                    existingAnnouncement.setMessage(
-                            updatedAnnouncement.getMessage());
+        existingAnnouncement.setTitle(
+                request.title().trim()
+        );
 
-                    existingAnnouncement.setAudience(
-                            updatedAnnouncement.getAudience());
+        existingAnnouncement.setMessage(
+                request.message().trim()
+        );
 
-                    Announcement savedAnnouncement =
-                            announcementRepository.save(existingAnnouncement);
+        existingAnnouncement.setAudience(
+                Announcement.GLOBAL_AUDIENCE
+        );
 
-                    return ResponseEntity.ok(savedAnnouncement);
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ResponseEntity.ok(
+                announcementRepository.save(existingAnnouncement)
+        );
     }
 
-    // DELETE: Delete an announcement
+    // Delete an announcement
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
+    public ResponseEntity<Void> delete(
+            @PathVariable Long id) {
 
-        if (!announcementRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
+        Announcement announcement =
+                announcementRepository.findById(id)
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "Announcement not found."
+                                )
+                        );
 
-        announcementRepository.deleteById(id);
+        announcementRepository.delete(announcement);
 
         return ResponseEntity.noContent().build();
+    }
+
+    // Validate announcement content
+    private void validateRequest(AnnouncementRequest request) {
+
+        if (request == null
+                || request.title() == null
+                || request.title().isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Announcement title is required."
+            );
+        }
+
+        if (request.title().trim().length() > 255) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Announcement title cannot exceed 255 characters."
+            );
+        }
+
+        if (request.message() == null
+                || request.message().isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Announcement message is required."
+            );
+        }
+
+        if (request.message().trim()
+                .getBytes(StandardCharsets.UTF_8).length > 65535) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Announcement message is too long."
+            );
+        }
     }
 }
