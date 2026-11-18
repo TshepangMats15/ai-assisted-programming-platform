@@ -1,7 +1,11 @@
 
 package AI.Productivity.Platform.config;
 
+import com.devmate.Entities.Users;
+import com.devmate.Repository.UserRepository;
+
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 
 import jakarta.servlet.FilterChain;
@@ -11,15 +15,24 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class FirebaseAuthFilter extends OncePerRequestFilter {
+
+    private final UserRepository userRepository;
+
+    public FirebaseAuthFilter(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @Override
     protected void doFilterInternal(
@@ -29,20 +42,22 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
 
         SecurityContextHolder.clearContext();
-
-        // Never accept a UID supplied by the client.
         request.removeAttribute("uid");
+
+        // Allow CORS preflight requests.
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
 
         String header = request.getHeader("Authorization");
 
-        // No token: continue unauthenticated.
-        // Spring Security decides whether the route is public.
+        // Spring Security handles unauthenticated requests.
         if (header == null || header.isBlank()) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Reject malformed Authorization headers.
         if (!header.startsWith("Bearer ")) {
             response.sendError(
                     HttpServletResponse.SC_UNAUTHORIZED,
@@ -61,58 +76,112 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             return;
         }
 
+        FirebaseToken decodedToken;
+
         try {
-            // Verify the token with Firebase Admin SDK.
-            FirebaseToken decodedToken =
-                    FirebaseAuth.getInstance()
-                            .verifyIdToken(idToken);
 
-            String firebaseUid = decodedToken.getUid();
+            // Verify token, revocation and disabled account status.
+            decodedToken = FirebaseAuth.getInstance()
+                    .verifyIdToken(idToken, true);
 
-            if (firebaseUid == null || firebaseUid.isBlank()) {
-                response.sendError(
-                        HttpServletResponse.SC_UNAUTHORIZED,
-                        "Firebase UID is missing."
-                );
-                return;
+        } catch (FirebaseAuthException e) {
+
+            response.sendError(
+                    HttpServletResponse.SC_UNAUTHORIZED,
+                    "Firebase authentication failed."
+            );
+            return;
+        }
+
+        String firebaseUid = decodedToken.getUid();
+
+        if (firebaseUid == null || firebaseUid.isBlank()) {
+            response.sendError(
+                    HttpServletResponse.SC_UNAUTHORIZED,
+                    "Firebase UID is missing."
+            );
+            return;
+        }
+
+        try {
+
+            Optional<Users> databaseUser =
+                    userRepository.findByFirebaseUid(firebaseUid);
+
+            List<SimpleGrantedAuthority> authorities =
+                    new ArrayList<>();
+
+            // Every verified Firebase identity receives ROLE_USER.
+            authorities.add(
+                    new SimpleGrantedAuthority("ROLE_USER")
+            );
+
+            if (databaseUser.isPresent()) {
+
+                String role = databaseUser.get().getRole();
+
+                // Only accept recognized database roles.
+                if ("ADMIN".equalsIgnoreCase(role)) {
+
+                    authorities.add(
+                            new SimpleGrantedAuthority("ROLE_ADMIN")
+                    );
+
+                } else if ("STUDENT".equalsIgnoreCase(role)) {
+
+                    authorities.add(
+                            new SimpleGrantedAuthority("ROLE_STUDENT")
+                    );
+
+                } else {
+
+                    response.sendError(
+                            HttpServletResponse.SC_FORBIDDEN,
+                            "Invalid account role."
+                    );
+                    return;
+                }
+
+            } else {
+
+                // Unsynchronized users may only access synchronization.
+                boolean syncRequest =
+                        "POST".equalsIgnoreCase(request.getMethod())
+                        && "/api/users/sync".equals(
+                                request.getServletPath()
+                        );
+
+                if (!syncRequest) {
+                    response.sendError(
+                            HttpServletResponse.SC_FORBIDDEN,
+                            "User synchronization required."
+                    );
+                    return;
+                }
             }
 
-            // Only use the UID obtained from the verified token.
             request.setAttribute("uid", firebaseUid);
 
-            // Authenticate the user for Spring Security.
-            // ROLE_USER does not grant admin privileges.
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
                             firebaseUid,
                             null,
-                            List.of(
-                                    new SimpleGrantedAuthority(
-                                            "ROLE_USER"
-                                    )
-                            )
+                            authorities
                     );
 
-            SecurityContextHolder.getContext()
-                    .setAuthentication(authentication);
+            SecurityContext context =
+                    SecurityContextHolder.createEmptyContext();
+
+            context.setAuthentication(authentication);
+
+            SecurityContextHolder.setContext(context);
 
             filterChain.doFilter(request, response);
 
-        } catch (com.google.firebase.auth.FirebaseAuthException e) {
+        } finally {
 
-            // Token verification failed.
             SecurityContextHolder.clearContext();
             request.removeAttribute("uid");
-
-            if (!response.isCommitted()) {
-                response.sendError(
-                        HttpServletResponse.SC_UNAUTHORIZED,
-                        "Invalid or expired Firebase ID token."
-                );
-            }
-
-        } finally {
-            SecurityContextHolder.clearContext();
         }
     }
 }

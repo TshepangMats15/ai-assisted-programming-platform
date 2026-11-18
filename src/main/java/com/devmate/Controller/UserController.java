@@ -2,16 +2,17 @@
 package com.devmate.Controller;
 
 import com.devmate.Entities.Users;
-import com.devmate.Repository.UserRepository;
 import com.devmate.Services.UserServices;
+import com.devmate.Services.FirebaseUserSyncService;
 
-import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
-import com.google.firebase.auth.UserRecord;
+
+import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -20,163 +21,146 @@ import java.util.List;
 public class UserController {
 
     private final UserServices userServices;
-    private final UserRepository userRepository;
+    private final FirebaseUserSyncService firebaseUserSyncService;
 
     public UserController(
             UserServices userServices,
-            UserRepository userRepository
+            FirebaseUserSyncService firebaseUserSyncService
     ) {
         this.userServices = userServices;
-        this.userRepository = userRepository;
-    }
-
-    // CREATE USER
-    @PostMapping
-    public ResponseEntity<Users> createUser(
-            @RequestBody Users user
-    ) {
-        Users createdUser = userServices.createUser(user);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(createdUser);
+        this.firebaseUserSyncService = firebaseUserSyncService;
     }
 
     // SYNC FIREBASE USER WITH MYSQL
     @PostMapping("/sync")
     public ResponseEntity<Void> syncUser(
-            @RequestHeader(
-                    value = "Authorization",
+            @RequestAttribute(
+                    value = "uid",
                     required = false
-            ) String authorizationHeader
-    ) throws FirebaseAuthException {
-
-        // Require a Firebase ID token.
-        if (authorizationHeader == null
-                || !authorizationHeader.startsWith("Bearer ")) {
-
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .build();
-        }
-
-        String idToken = authorizationHeader
-                .substring(7)
-                .trim();
-
-        if (idToken.isEmpty()) {
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .build();
-        }
-
-        // Verify the Firebase token.
-        String firebaseUid;
-
-        try {
-            firebaseUid = FirebaseAuth.getInstance()
-                    .verifyIdToken(idToken)
-                    .getUid();
-
-        } catch (FirebaseAuthException e) {
-            return ResponseEntity
-                    .status(HttpStatus.UNAUTHORIZED)
-                    .build();
-        }
-
-        // Preserve existing SQL users and their roles.
-        if (userRepository.findByFirebaseUid(firebaseUid)
-                .isPresent()) {
-
-            return ResponseEntity.ok().build();
-        }
-
-        // Retrieve the user's Firebase profile.
-        UserRecord firebaseUser = FirebaseAuth.getInstance()
-                .getUser(firebaseUid);
-
-        String email = firebaseUser.getEmail();
-
-        // Email is mandatory in the Users entity.
-        if (email == null || email.isBlank()) {
-            return ResponseEntity
-                    .badRequest()
-                    .build();
-        }
-
-        // Prevent duplicate email conflicts.
-        if (userRepository.existsByEmail(email)) {
-            return ResponseEntity
-                    .status(HttpStatus.CONFLICT)
-                    .build();
-        }
-
-        // Create the MySQL user.
-        Users user = new Users();
-
-        user.setFirebaseUid(firebaseUid);
-        user.setEmail(email);
-
-        String displayName = firebaseUser.getDisplayName();
-
-        user.setFullName(
-                displayName != null && !displayName.isBlank()
-                        ? displayName
-                        : email
-        );
-
-        // All newly synchronized users are students.
-        user.setRole(Users.Role.STUDENT.name());
-
-        // Firebase manages passwords.
-        user.setPassword(null);
-
-        // Optional activity timestamp.
-        user.setLastActive(null);
-
-        // The Users entity automatically generates UserID.
-        userRepository.save(user);
-
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .build();
-    }
-
-    // GET ALL USERS
-    @GetMapping
-    public ResponseEntity<List<Users>> getAllUsers() {
-
-        List<Users> users = userServices.getAllUsers();
-
-        return ResponseEntity.ok(users);
-    }
-
-    // GET ACTIVE USERS
-    @GetMapping("/active")
-    public ResponseEntity<List<Users>> getActiveUsers() {
-
-        List<Users> users = userServices.getActiveUsers();
-
-        return ResponseEntity.ok(users);
-    }
-
-    // GET USER BY ID
-    @GetMapping("/{userID}")
-    public ResponseEntity<Users> getUserById(
-            @PathVariable String userID
+            ) String firebaseUid
     ) {
 
-        Users user = userServices.getUserById(userID);
+        requireAuthenticatedUid(firebaseUid);
 
-        return ResponseEntity.ok(user);
+        try {
+
+            FirebaseUserSyncService.SyncStatus status =
+                    firebaseUserSyncService.syncUserByUid(firebaseUid);
+
+            return switch (status) {
+
+                case CREATED -> ResponseEntity
+                        .status(HttpStatus.CREATED)
+                        .build();
+
+                case ALREADY_EXISTS -> ResponseEntity
+                        .ok()
+                        .build();
+
+                case MISSING_EMAIL -> ResponseEntity
+                        .badRequest()
+                        .build();
+
+                case EMAIL_CONFLICT -> ResponseEntity
+                        .status(HttpStatus.CONFLICT)
+                        .build();
+
+                case DISABLED -> ResponseEntity
+                        .status(HttpStatus.FORBIDDEN)
+                        .build();
+            };
+
+        } catch (FirebaseAuthException e) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "Unable to retrieve Firebase user.",
+                    e
+            );
+        }
     }
 
-    // UPDATE USER
+    // ADMIN: GET ALL USERS
+    @GetMapping
+    public ResponseEntity<List<Users>> getAllUsers(
+            HttpServletRequest request
+    ) {
+
+        requireAdmin(request);
+
+        return ResponseEntity.ok(
+                userServices.getAllUsers()
+        );
+    }
+
+    // ADMIN: GET ACTIVE USERS
+    @GetMapping("/active")
+    public ResponseEntity<List<Users>> getActiveUsers(
+            HttpServletRequest request
+    ) {
+
+        requireAdmin(request);
+
+        return ResponseEntity.ok(
+                userServices.getActiveUsers()
+        );
+    }
+
+    // GET CURRENT AUTHENTICATED USER
+    @GetMapping("/me")
+    public ResponseEntity<Users> getCurrentUser(
+            @RequestAttribute(
+                    value = "uid",
+                    required = false
+            ) String firebaseUid
+    ) {
+
+        requireAuthenticatedUid(firebaseUid);
+
+        return ResponseEntity.ok(
+                userServices.getUserById(firebaseUid)
+        );
+    }
+
+    // GET USER BY FIREBASE UID
+    @GetMapping("/{userID}")
+    public ResponseEntity<Users> getUserById(
+            @PathVariable String userID,
+
+            @RequestAttribute(
+                    value = "uid",
+                    required = false
+            ) String firebaseUid,
+
+            HttpServletRequest request
+    ) {
+
+        requireAuthenticatedUid(firebaseUid);
+
+        boolean isOwner = firebaseUid.equals(userID);
+        boolean isAdmin = request.isUserInRole("ADMIN");
+
+        if (!isOwner && !isAdmin) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You cannot access another user's profile."
+            );
+        }
+
+        return ResponseEntity.ok(
+                userServices.getUserById(userID)
+        );
+    }
+
+    // ADMIN: UPDATE USER
     @PutMapping("/{userID}")
     public ResponseEntity<Users> updateUser(
             @PathVariable String userID,
-            @RequestBody Users user
+            @RequestBody Users user,
+            HttpServletRequest request
     ) {
+
+        requireAdmin(request);
 
         Users updatedUser = userServices.updateUser(
                 userID,
@@ -186,13 +170,27 @@ public class UserController {
         return ResponseEntity.ok(updatedUser);
     }
 
-    // UPDATE USER ACTIVITY
+    // UPDATE OWN USER ACTIVITY
     @PutMapping("/{userID}/heartbeat")
     public ResponseEntity<Void> heartbeat(
-            @PathVariable String userID
+            @PathVariable String userID,
+
+            @RequestAttribute(
+                    value = "uid",
+                    required = false
+            ) String firebaseUid
     ) {
 
-        boolean updated = userServices.markActive(userID);
+        requireAuthenticatedUid(firebaseUid);
+
+        if (!firebaseUid.equals(userID)) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You cannot update another user's activity."
+            );
+        }
+
+        boolean updated = userServices.markActive(firebaseUid);
 
         if (!updated) {
             return ResponseEntity.notFound().build();
@@ -201,14 +199,46 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
-    // DELETE USER
+    // ADMIN: DELETE USER
     @DeleteMapping("/{userID}")
     public ResponseEntity<Void> deleteUser(
-            @PathVariable String userID
+            @PathVariable String userID,
+            HttpServletRequest request
     ) {
+
+        requireAdmin(request);
 
         userServices.deleteUser(userID);
 
         return ResponseEntity.noContent().build();
+    }
+
+    // AUTHENTICATION HELPER
+    private void requireAuthenticatedUid(String firebaseUid) {
+
+        if (firebaseUid == null || firebaseUid.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication required."
+            );
+        }
+    }
+
+    // ADMIN AUTHORIZATION HELPER
+    private void requireAdmin(HttpServletRequest request) {
+
+        if (request.getUserPrincipal() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication required."
+            );
+        }
+
+        if (!request.isUserInRole("ADMIN")) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Administrator access required."
+            );
+        }
     }
 }

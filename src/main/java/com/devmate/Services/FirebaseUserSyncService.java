@@ -17,11 +17,14 @@ import org.springframework.stereotype.Service;
 public class FirebaseUserSyncService {
 
     private final UserRepository userRepository;
+    private final FirebaseUserInsertService insertService;
 
     public FirebaseUserSyncService(
-            UserRepository userRepository
+            UserRepository userRepository,
+            FirebaseUserInsertService insertService
     ) {
         this.userRepository = userRepository;
+        this.insertService = insertService;
     }
 
     public enum SyncStatus {
@@ -32,7 +35,7 @@ public class FirebaseUserSyncService {
         DISABLED
     }
 
-    // SYNCHRONIZE ONE USER USING THEIR FIREBASE UID
+    // SYNCHRONIZE ONE FIREBASE USER
     public SyncStatus syncUserByUid(String firebaseUid)
             throws FirebaseAuthException {
 
@@ -43,7 +46,7 @@ public class FirebaseUserSyncService {
         return syncFirebaseUser(firebaseUser);
     }
 
-    // SYNCHRONIZE A FIREBASE USER WITH MYSQL
+    // SYNCHRONIZE FIREBASE USER WITH MYSQL
     private SyncStatus syncFirebaseUser(
             UserRecord firebaseUser
     ) {
@@ -52,25 +55,34 @@ public class FirebaseUserSyncService {
         String email = firebaseUser.getEmail();
         String displayName = firebaseUser.getDisplayName();
 
-        // Do not import disabled Firebase accounts.
+        // Do not import disabled accounts.
         if (firebaseUser.isDisabled()) {
             return SyncStatus.DISABLED;
         }
 
-        // Preserve existing users, SQL IDs and roles.
+        // Preserve existing SQL IDs, profiles and roles.
         if (userRepository.findByFirebaseUid(firebaseUid)
                 .isPresent()) {
 
             return SyncStatus.ALREADY_EXISTS;
         }
 
-        // Email is mandatory in the current Users entity.
+        // Email is mandatory.
         if (email == null || email.isBlank()) {
             return SyncStatus.MISSING_EMAIL;
         }
 
-        // Prevent linking an email to the wrong Firebase UID.
+        // Prevent incorrect account linking.
         if (userRepository.existsByEmail(email)) {
+
+            // Another request may have inserted this user
+            // after the initial UID check.
+            if (userRepository.findByFirebaseUid(firebaseUid)
+                    .isPresent()) {
+
+                return SyncStatus.ALREADY_EXISTS;
+            }
+
             return SyncStatus.EMAIL_CONFLICT;
         }
 
@@ -85,33 +97,37 @@ public class FirebaseUserSyncService {
                         : email
         );
 
-        // Newly imported users receive the STUDENT role.
+        // New users are always students.
         user.setRole(Users.Role.STUDENT.name());
 
-        // Firebase handles authentication and passwords.
+        // Firebase manages authentication credentials.
         user.setPassword(null);
 
-        // Importing does not indicate current activity.
+        // Importing a user does not indicate activity.
         user.setLastActive(null);
 
         try {
-            userRepository.saveAndFlush(user);
+
+            // Insert only. Never merge an existing user.
+            insertService.insertUser(user);
 
             return SyncStatus.CREATED;
 
         } catch (DataIntegrityViolationException e) {
 
-            // Handle concurrent synchronization requests.
+            // Another request may have inserted the same UID.
             if (userRepository.findByFirebaseUid(firebaseUid)
                     .isPresent()) {
 
                 return SyncStatus.ALREADY_EXISTS;
             }
 
+            // Check for a conflicting email.
             if (userRepository.existsByEmail(email)) {
                 return SyncStatus.EMAIL_CONFLICT;
             }
 
+            // Do not hide unrelated database errors.
             throw e;
         }
     }
@@ -131,7 +147,7 @@ public class FirebaseUserSyncService {
                 FirebaseAuth.getInstance()
                         .listUsers(null);
 
-        // iterateAll automatically handles Firebase pagination.
+        // Automatically handle Firebase pagination.
         for (ExportedUserRecord firebaseUser :
                 page.iterateAll()) {
 
@@ -141,10 +157,15 @@ public class FirebaseUserSyncService {
                     syncFirebaseUser(firebaseUser);
 
             switch (status) {
+
                 case CREATED -> imported++;
+
                 case ALREADY_EXISTS -> alreadyExists++;
+
                 case MISSING_EMAIL -> missingEmail++;
+
                 case EMAIL_CONFLICT -> emailConflicts++;
+
                 case DISABLED -> disabled++;
             }
         }
@@ -170,4 +191,3 @@ public class FirebaseUserSyncService {
     ) {
     }
 }
-
