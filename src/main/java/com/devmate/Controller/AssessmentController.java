@@ -1,22 +1,27 @@
+
 package com.devmate.Controller;
 
 import com.devmate.Entities.Assessment;
 import com.devmate.Entities.Question;
 import com.devmate.Services.AssessmentServices;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/assessments")
-
 public class AssessmentController {
+
     private final AssessmentServices assessmentServices;
 
     public AssessmentController(
             AssessmentServices assessmentServices) {
+
         this.assessmentServices = assessmentServices;
     }
 
@@ -24,8 +29,36 @@ public class AssessmentController {
     @PostMapping
     public ResponseEntity<Assessment> createAssessment(
             @RequestBody Assessment assessment) {
+
         Assessment created =
                 assessmentServices.createAssessment(assessment);
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(created);
+    }
+
+    // CREATE COMPLETE ASSESSMENT
+    @PostMapping("/complete")
+    public ResponseEntity<Assessment> createCompleteAssessment(
+            @RequestBody AssessmentServices.AssessmentRequest request,
+            Authentication authentication) {
+
+        if (authentication == null ||
+                authentication.getAuthorities().stream()
+                        .noneMatch(authority ->
+                                "ROLE_ADMIN".equals(
+                                        authority.getAuthority()
+                                ))) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Admin access required."
+            );
+        }
+
+        Assessment created =
+                assessmentServices.createCompleteAssessment(request);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
