@@ -292,7 +292,7 @@ export default function CoursesScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.replace("/club-admin")}
+            onPress={() => router.back()}
           >
             <Ionicons
               name="arrow-back"
