@@ -55,7 +55,7 @@ public class AnalyticsServices {
         summary.put("totalSubmissions", (int) totalSubmissions);
         summary.put("totalAIInteractions", interactions.size());
         summary.put("totalAiInteractions", interactions.size());
-        summary.put("avgSimilarityScore", 85.0); // Baseline benchmark
+        summary.put("avgSimilarityScore", null); // Baseline benchmark
         summary.put("averageCompletionTimeSeconds", averageCompletionTime(results));
         summary.put("successfulAIInteractions", countByStatus(interactions, "SUCCESS"));
         summary.put("failedAIInteractions", countByStatus(interactions, "FAILED"));
