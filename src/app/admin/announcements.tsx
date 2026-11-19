@@ -7,7 +7,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +14,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "../../services/api";
 
@@ -32,26 +33,13 @@ const COLORS = {
   danger: "#F87171",
 };
 
-type Audience =
-  | "All Students"
-  | "Java Students"
-  | "Python Students"
-  | "Selected Students";
-
 type Announcement = {
   id: string;
   title: string;
   message: string;
-  audience: Audience;
   date: string;
 };
 
-const audienceOptions: Audience[] = [
-  "All Students",
-  "Java Students",
-  "Python Students",
-  "Selected Students",
-];
 
 function formatDate(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) {
@@ -72,17 +60,12 @@ function formatDate(value: unknown): string {
 }
 
 // Convert a backend announcement into the shape this screen uses
-function toAnnouncement(item: any, index: number): Announcement {
-  const audience: Audience = audienceOptions.includes(item?.audience)
-    ? item.audience
-    : "All Students";
-
+function toAnnouncement(item: any): Announcement {
   return {
-    id: String(item?.id ?? item?.announcementID ?? `announcement-${index}`),
-    title: item?.title || "Untitled announcement",
-    message: item?.message || "",
-    audience,
-    date: formatDate(item?.createdAt ?? item?.date),
+    id: String(item.id),
+    title: item.title || "Untitled announcement",
+    message: item.message || "",
+    date: formatDate(item.createdAt),
   };
 }
 
@@ -99,8 +82,6 @@ export default function AdminAnnouncementsScreen() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
-  const [targetAudience, setTargetAudience] =
-    useState<Audience>("All Students");
 
   // Load announcements from the Spring Boot backend
   const loadAnnouncements = useCallback(async () => {
@@ -141,7 +122,6 @@ export default function AdminAnnouncementsScreen() {
   function resetForm() {
     setTitle("");
     setMessage("");
-    setTargetAudience("All Students");
     setEditingId(null);
   }
 
@@ -154,7 +134,6 @@ export default function AdminAnnouncementsScreen() {
     setEditingId(item.id);
     setTitle(item.title);
     setMessage(item.message);
-    setTargetAudience(item.audience);
     setIsCreating(true);
   }
 
@@ -179,18 +158,10 @@ export default function AdminAnnouncementsScreen() {
       return;
     }
 
-    if (targetAudience === "Selected Students") {
-      Alert.alert(
-        "Select Recipients",
-        "Individual student selection has not been connected yet. Please choose another audience."
-      );
-      return;
-    }
 
     const payload = {
       title: cleanTitle,
       message: cleanMessage,
-      audience: targetAudience,
     };
 
     try {
@@ -408,7 +379,7 @@ export default function AdminAnnouncementsScreen() {
                       />
 
                       <Text style={styles.audienceBadgeText}>
-                        {item.audience}
+                        All Students
                       </Text>
                     </View>
 
@@ -507,46 +478,17 @@ export default function AdminAnnouncementsScreen() {
                 maxLength={2000}
               />
 
-              {/* AUDIENCE */}
-              <Text style={styles.inputLabel}>
-                Send To
-              </Text>
-
+              <Text style={styles.inputLabel}>Recipients</Text>
               <View style={styles.audienceCard}>
-                {audienceOptions.map((option, index) => (
-                  <React.Fragment key={option}>
-                    <TouchableOpacity
-                      style={styles.radioRow}
-                      onPress={() => setTargetAudience(option)}
-                      accessibilityRole="radio"
-                      accessibilityState={{
-                        checked: targetAudience === option,
-                      }}
-                    >
-                      <Ionicons
-                        name={
-                          targetAudience === option
-                            ? "radio-button-on"
-                            : "radio-button-off"
-                        }
-                        size={22}
-                        color={
-                          targetAudience === option
-                            ? COLORS.purple
-                            : COLORS.muted
-                        }
-                      />
-
-                      <Text style={styles.radioText}>
-                        {option}
-                      </Text>
-                    </TouchableOpacity>
-
-                    {index < audienceOptions.length - 1 && (
-                      <View style={styles.radioDivider} />
-                    )}
-                  </React.Fragment>
-                ))}
+                <View style={styles.radioRow}>
+                  <Ionicons name="people-outline" size={22} color={COLORS.lightPurple} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: COLORS.white, fontWeight: "600" }}>All Students</Text>
+                    <Text style={{ color: COLORS.secondary, fontSize: 12, marginTop: 4 }}>
+                      Visible to every student.
+                    </Text>
+                  </View>
+                </View>
               </View>
 
               {/* FORM BUTTONS */}
@@ -584,7 +526,7 @@ export default function AdminAnnouncementsScreen() {
                       <Text style={styles.saveButtonText}>
                         {editingId !== null
                           ? "Save Changes"
-                          : "Save Announcement"}
+                          : "Publish Announcement"}
                       </Text>
                     </>
                   )}

@@ -2,13 +2,14 @@
 
 import React, {
   useCallback,
-  useEffect,
+  useRef,
   useState,
 } from "react";
 
 import {
   router,
   useLocalSearchParams,
+  useFocusEffect,
 } from "expo-router";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -28,6 +29,7 @@ import {
 import api, {
   AssessmentDTO,
   QuestionDTO,
+  SubmissionRecord,
 } from "../constants/api";
 
 import { useAppTheme } from "../context/ThemeContext";
@@ -35,12 +37,13 @@ import { useAppTheme } from "../context/ThemeContext";
 export default function AssessmentDetailsScreen() {
   const { colors, isDark } = useAppTheme();
 
-  const { assessmentId, courseID } =
+  const { assessmentId, courseID, submissionId } =
     useLocalSearchParams<{
       assessmentId?: string;
       assessmentTitle?: string;
       language?: string;
       courseID?: string;
+      submissionId?: string;
     }>();
 
   const purple = "#8B5CF6";
@@ -59,6 +62,11 @@ export default function AssessmentDetailsScreen() {
   const [questions, setQuestions] =
     useState<QuestionDTO[]>([]);
 
+  const [draft, setDraft] = useState<SubmissionRecord | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const mutation = useRef(false);
+  const locked = !!draft && draft.status !== "DRAFT";
   const [loading, setLoading] =
     useState(true);
 
@@ -113,6 +121,11 @@ export default function AssessmentDetailsScreen() {
           ),
         ]);
 
+        const record = submissionId ? await api.submissions.getById(Number(submissionId)) : await api.submissions.getCurrentAttempt(parsedAssessmentId);
+        if (record && record.assessment?.assessmentID !== parsedAssessmentId) throw new Error("Submission does not belong to this assessment.");
+        const savedAnswers = record ? await api.submissions.getAnswers(record.submissionId) : {};
+        setDraft(record);
+        setAnswers(savedAnswers);
         setAssessment(assessmentData);
 
         setQuestions(
@@ -139,11 +152,10 @@ export default function AssessmentDetailsScreen() {
     }, [
       parsedAssessmentId,
       validAssessmentId,
+      submissionId,
     ]);
 
-  useEffect(() => {
-    loadAssessment();
-  }, [loadAssessment]);
+  useFocusEffect(useCallback(() => { void loadAssessment(); }, [loadAssessment]));
 
   // =======================================================
   // REFRESH
@@ -178,6 +190,7 @@ export default function AssessmentDetailsScreen() {
 const openCodingQuestion = (
   question: QuestionDTO
 ) => {
+  if (busy || locked) return;
   // The route assessmentId is already validated
   // when this screen loads.
   if (!validAssessmentId || !assessment) {
@@ -226,6 +239,7 @@ const openCodingQuestion = (
     params: {
       assessmentId: String(idToOpen),
       questionID: question.questionID,
+      ...(draft ? { submissionId: String(draft.submissionId) } : {}),
       language: assessment.programLang || "",
       courseID:
         typeof courseID === "string"
@@ -234,6 +248,36 @@ const openCodingQuestion = (
     },
   });
 };
+
+  function optionsFor(q: QuestionDTO): string[] {
+    try { const data = JSON.parse(q.optionsJson ?? "[]"); return Array.isArray(data) ? data.filter((v): v is string => typeof v === "string") : []; } catch { return []; }
+  }
+  async function selectAnswer(q: QuestionDTO, answer: string) {
+    if (mutation.current || locked) return;
+    mutation.current = true; setBusy(true);
+    try {
+      const id = draft?.submissionId ?? (await api.submissions.createDraft(parsedAssessmentId)).submissionId;
+      const record = await api.submissions.getById(id);
+      setDraft(record);
+      setAnswers(await api.submissions.saveAnswers(id, { [q.questionID]: answer }));
+    } catch (e) { Alert.alert("Unable to save answer", e instanceof Error ? e.message : "Try again."); }
+    finally { mutation.current = false; setBusy(false); }
+  }
+  const ready = questions.length > 0 && !!draft && questions.every(q => q.questionType === "MULTIPLE_CHOICE" ? optionsFor(q).includes(answers[q.questionID]) : q.questionType === "CODING_CHALLENGE" && !!draft.sourceCode?.trim());
+  async function finishAssessment() {
+    if (!draft || mutation.current) return;
+    mutation.current = true; setBusy(true);
+    try {
+      const record = locked ? draft : await api.submissions.finalize(draft.submissionId);
+      setDraft(record);
+      const result = await api.submissions.gradeSubmission(record.submissionId);
+      setDraft(await api.submissions.getById(record.submissionId));
+      Alert.alert("Assessment graded", result.message);
+    } catch (e) {
+      try { setDraft(await api.submissions.getById(draft.submissionId)); } catch { /* keep last known state */ }
+      Alert.alert("Assessment update", e instanceof Error ? e.message : "Try again from submission history.");
+    } finally { mutation.current = false; setBusy(false); }
+  }
 
   // =======================================================
   // HELPERS
@@ -871,14 +915,14 @@ const openCodingQuestion = (
                         )
                       }
                       accessibilityRole="button"
+                      disabled={busy || locked}
                     >
                       <Text
                         style={
                           styles.openQuestionButtonText
                         }
                       >
-                        Open Coding
-                        Challenge
+                        {locked ? "Code locked" : draft?.sourceCode?.trim() ? "Edit Saved Code" : "Open Coding Challenge"}
                       </Text>
 
                       <Ionicons
@@ -887,41 +931,17 @@ const openCodingQuestion = (
                         color="#FFFFFF"
                       />
                     </TouchableOpacity>
-                  ) : (
-                    <View
-                      style={[
-                        styles.nonCodingNotice,
-                        {
-                          backgroundColor:
-                            isDark
-                              ? "#202020"
-                              : "#F5F5F5",
-                        },
-                      ]}
-                    >
-                      <Ionicons
-                        name="document-text-outline"
-                        size={16}
-                        color={
-                          colors.textSecondary
-                        }
-                      />
-
-                      <Text
-                        style={[
-                          styles.nonCodingText,
-                          {
-                            color:
-                              colors.textSecondary,
-                          },
-                        ]}
-                      >
-                        This question
-                        does not use the
-                        coding workspace.
-                      </Text>
+                  ) : question.questionType === "MULTIPLE_CHOICE" ? (
+                    <View style={{ marginTop: 12, gap: 8 }}>
+                      {optionsFor(question).map((option, i) => (
+                        <TouchableOpacity key={i} disabled={busy || locked} onPress={() => void selectAnswer(question, option)} accessibilityRole="radio" accessibilityState={{ checked: answers[question.questionID] === option, disabled: busy || locked }} style={{ borderWidth: 1, borderColor: answers[question.questionID] === option ? purple : colors.border, borderRadius: 9, padding: 12, flexDirection: "row", gap: 8 }}>
+                          <Ionicons name={answers[question.questionID] === option ? "radio-button-on" : "radio-button-off"} size={19} color={purple} />
+                          <Text style={{ color: colors.text, flex: 1 }}>{option}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      {!optionsFor(question).length && <Text style={{ color: colors.textSecondary }}>No valid options available.</Text>}
                     </View>
-                  )}
+                  ) : <Text style={{ color: colors.textSecondary }}>Unsupported question type.</Text>}
                 </View>
               );
             }
@@ -1049,8 +1069,9 @@ const openCodingQuestion = (
           </View>
         </View>
 
-        {/* No generic Start Assessment button.
-            Coding questions are opened individually above. */}
+        <Text style={{ color: colors.text, marginBottom: 10 }}>Status: {draft?.status ?? "Not started"}{draft?.score != null ? ` • ${draft.score}%` : ""}</Text>
+        {draft?.status !== "GRADED" && <TouchableOpacity style={[styles.openQuestionButton, { opacity: busy || (!locked && !ready) ? 0.5 : 1 }]} disabled={busy || (!locked && !ready)} onPress={() => locked ? void finishAssessment() : Alert.alert("Submit assessment?", "Your answers and code will be locked.", [{ text: "Cancel", style: "cancel" }, { text: "Submit", onPress: () => void finishAssessment() }])}><Text style={styles.openQuestionButtonText}>{busy ? "Please wait..." : locked ? "Check / Retry Grading" : "Submit Assessment"}</Text></TouchableOpacity>}
+
 
         <Text
           style={[

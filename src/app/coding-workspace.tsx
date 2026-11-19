@@ -1,10 +1,10 @@
-
 import React, {
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -13,7 +13,6 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -101,7 +100,7 @@ function detectLanguage(code: string): string {
       JSON.parse(text);
       return "JSON";
     } catch {
-      // Continue detecting.
+      // Continue detection.
     }
   }
 
@@ -157,6 +156,7 @@ export default function CodingWorkspaceScreen() {
     language?: string;
     code?: string;
     courseID?: string;
+    submissionId?: string;
   }>();
 
   const {
@@ -196,6 +196,11 @@ export default function CodingWorkspaceScreen() {
   const [code, setCode] = useState(
     typeof params.code === "string" ? params.code : ""
   );
+
+  // Tracks which saved SQL submission is being edited
+  const [locked, setLocked] = useState(false);
+  const [editingSubmissionId, setEditingSubmissionId] =
+    useState<number | null>(null);
 
   const [selectedLanguage, setSelectedLanguage] =
     useState<Language>(
@@ -269,6 +274,7 @@ export default function CodingWorkspaceScreen() {
 
   const canSubmitAssessment =
     validAssessmentId &&
+    !locked &&
     !assessmentLoading &&
     !assessmentError &&
     selectedQuestion?.questionType === "CODING_CHALLENGE";
@@ -339,12 +345,12 @@ export default function CodingWorkspaceScreen() {
       setAssessmentQuestions(questions);
       setSelectedQuestion(chosenQuestion);
 
-      if (
-        chosenQuestion?.starterCode &&
-        !params.code
-      ) {
-        setCode(chosenQuestion.starterCode);
-      }
+      const saved = params.submissionId ? await api.submissions.getById(Number(params.submissionId)) : await api.submissions.getCurrentAttempt(selectedAssessmentId);
+      if (saved && saved.assessment?.assessmentID !== selectedAssessmentId) throw new Error("Submission does not belong to this assessment.");
+      setEditingSubmissionId(saved?.submissionId ?? null);
+      setLocked(!!saved && saved.status !== "DRAFT");
+      setCode(saved?.sourceCode ?? chosenQuestion?.starterCode ?? "");
+      if (!normalizeLanguage(assessmentData.programLang) || ["HTML", "CSS", "JSON"].includes(normalizeLanguage(assessmentData.programLang) ?? "")) throw new Error("Assessment language is not supported by the code runner.");
     } catch (error: any) {
       console.warn(
         "[Coding Workspace] Assessment loading failed:",
@@ -366,6 +372,7 @@ export default function CodingWorkspaceScreen() {
     selectedAssessmentId,
     questionID,
     params.code,
+    params.submissionId,
   ]);
 
   useEffect(() => {
@@ -495,7 +502,7 @@ export default function CodingWorkspaceScreen() {
   }
 
   async function runCode() {
-    if (running) return;
+    if (running || assessmentLoading || assessmentError) return;
 
     if (!code.trim()) {
       setOutput(
@@ -562,28 +569,34 @@ export default function CodingWorkspaceScreen() {
 
     try {
       setSubmitting(true);
-      setOutput("Submitting your code...");
+      setOutput("Saving your code...");
 
-      const result = await api.submissions.submitCode({
-        assessmentId: selectedAssessmentId,
-        sourceCode: code,
-        attemptNumber: 1,
-      });
+      const result = editingSubmissionId
+        ? await api.submissions.updateCode(
+            editingSubmissionId,
+            code
+          )
+        : await api.submissions.submitCode({
+            assessmentId: selectedAssessmentId,
+            sourceCode: code,
+            attemptNumber: 1,
+          });
+
+      setEditingSubmissionId(result.submissionId);
 
       setOutput(
-        `Submission successful!\n` +
+        `Code saved successfully!\n` +
         `Submission ID: #${result.submissionId}\n` +
-        `Submitted at: ${result.submittedAt}\n` +
-        `${result.message || ""}`
+        `Saved at: ${result.submittedAt ?? "Just now"}`
       );
 
       Alert.alert(
-        "Submission Successful",
-        "Your code has been submitted successfully.",
+        "Code Saved",
+        "Your code has been saved successfully.",
         [
           {
-            text: "View Submissions",
-            onPress: () => router.push("/submission"),
+            text: "Return to Assessment",
+            onPress: () => router.back(),
           },
           {
             text: "Continue Coding",
@@ -836,7 +849,7 @@ export default function CodingWorkspaceScreen() {
                 themeStyles.accentSurface,
               ]}
               onPress={() =>
-                setShowLanguages(!showLanguages)
+                isStandalone && setShowLanguages(!showLanguages)
               }
             >
               <Text
@@ -845,7 +858,7 @@ export default function CodingWorkspaceScreen() {
                   themeStyles.accentText,
                 ]}
               >
-                {currentLanguage} ▼
+                {currentLanguage} â–¼
               </Text>
             </TouchableOpacity>
           </View>
@@ -913,7 +926,7 @@ export default function CodingWorkspaceScreen() {
                   themeStyles.secondary,
                 ]}
               >
-                Editing
+                {locked ? "Locked" : "Editing"}
               </Text>
             </View>
 
@@ -954,6 +967,7 @@ export default function CodingWorkspaceScreen() {
                 ]}
                 value={code}
                 onChangeText={setCode}
+                editable={!locked && !assessmentLoading && !assessmentError && !submitting}
                 multiline
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -1262,8 +1276,10 @@ export default function CodingWorkspaceScreen() {
 
             <Text style={styles.submitButtonText}>
               {submitting
-                ? "Submitting..."
-                : "Submit Code"}
+                ? "Saving..."
+                : editingSubmissionId
+                  ? "Save Changes"
+                  : "Save Code"}
             </Text>
           </TouchableOpacity>
 
@@ -1275,7 +1291,7 @@ export default function CodingWorkspaceScreen() {
           >
             {isStandalone
               ? "Practice mode: open an assessment to submit your code."
-              : "Review your code carefully before submitting."}
+              : "Save your code, then submit the assessment from Assessment Details."}
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

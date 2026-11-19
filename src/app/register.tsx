@@ -1,5 +1,5 @@
-
 import { useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -9,12 +9,11 @@ import {
   TextInput,
   TouchableOpacity,
 } from "react-native";
-import {
-  createUserWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
-import { auth } from "../services/firebase";
+
+import { useAuth } from "../context/AuthContext";
+
 import { router } from "expo-router";
+import { sendEmailVerification } from "firebase/auth";
 
 export default function RegisterScreen() {
   const [firstName, setFirstName] = useState("");
@@ -23,48 +22,85 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const { register } = useAuth();
+
+  const [loadingMessage, setLoadingMessage] =
+    useState("Creating account...");
 
   const handleRegister = async () => {
+
+    if (loading) {
+      return;
+    }
+
+    const cleanFirstName = firstName.trim();
+    const cleanSurname = surname.trim();
+    const cleanEmail = email.trim();
+
+    const fullName =
+      `${cleanFirstName} ${cleanSurname}`;
+
+    // STEP 1: Validate registration information.
     if (
-      !firstName.trim() ||
-      !surname.trim() ||
-      !email.trim() ||
+      !cleanFirstName ||
+      !cleanSurname ||
+      !cleanEmail ||
       !password ||
       !confirmPassword
     ) {
-      Alert.alert("Error", "Please complete all fields.");
+      Alert.alert(
+        "Missing Information",
+        "Please complete all fields."
+      );
+      return;
+    }
+
+    if (fullName.length > 255) {
+      Alert.alert(
+        "Invalid Name",
+        "Your full name must not exceed 255 characters."
+      );
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match.");
+      Alert.alert(
+        "Password Mismatch",
+        "Passwords do not match."
+      );
       return;
     }
 
-    if (password.length < 8) {
-      Alert.alert("Short Password", "Password must be at least 8 characters.");
+    // Match the password requirements shown on screen.
+    const validPassword =
+      password.length >= 8 &&
+      /[A-Z]/.test(password) &&
+      /[a-z]/.test(password) &&
+      /[0-9]/.test(password) &&
+      /[^A-Za-z0-9\s]/.test(password);
+
+    if (!validPassword) {
+      Alert.alert(
+        "Weak Password",
+        "Your password must contain at least 8 characters, an uppercase letter, a lowercase letter, a number and a special character."
+      );
       return;
     }
+
+    setLoading(true);
+    setLoadingMessage("Creating account...");
 
     try {
-      setLoading(true);
-
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-
-      await updateProfile(userCredential.user, {
-        displayName: `${firstName.trim()} ${surname.trim()}`,
-      });
-
-      Alert.alert("Success", "Your student account has been created.");
-      router.replace("/dashboard");
+      setLoadingMessage("Creating and synchronizing account...");
+      await register(cleanEmail, password, fullName);
     } catch (error: any) {
-      Alert.alert("Registration Failed", error.message);
+      Alert.alert("Registration Failed", error?.code === "auth/email-already-in-use"
+        ? "An account already exists with this email. Please log in."
+        : error?.message || "Unable to create your account.");
     } finally {
+
       setLoading(false);
+      setLoadingMessage("Creating account...");
     }
   };
 
@@ -73,7 +109,10 @@ export default function RegisterScreen() {
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.title}>Create Account</Text>
+      <Text style={styles.title}>
+        Create Account
+      </Text>
+
       <Text style={styles.subtitle}>
         Register as a student to continue
       </Text>
@@ -84,6 +123,7 @@ export default function RegisterScreen() {
         value={firstName}
         onChangeText={setFirstName}
         autoCapitalize="words"
+        editable={!loading}
       />
 
       <TextInput
@@ -92,6 +132,7 @@ export default function RegisterScreen() {
         value={surname}
         onChangeText={setSurname}
         autoCapitalize="words"
+        editable={!loading}
       />
 
       <TextInput
@@ -101,6 +142,8 @@ export default function RegisterScreen() {
         onChangeText={setEmail}
         keyboardType="email-address"
         autoCapitalize="none"
+        autoCorrect={false}
+        editable={!loading}
       />
 
       <TextInput
@@ -109,10 +152,15 @@ export default function RegisterScreen() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!loading}
       />
 
       <Text style={styles.passwordInfo}>
-        Password must have 8+ characters, uppercase, lowercase, number and special character.
+        Password must have 8+ characters,
+        uppercase, lowercase, number and
+        special character.
       </Text>
 
       <TextInput
@@ -121,31 +169,39 @@ export default function RegisterScreen() {
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         secureTextEntry
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!loading}
       />
 
       <TouchableOpacity
-        style={styles.button}
+        style={[
+          styles.button,
+          loading && styles.disabledButton,
+        ]}
         onPress={handleRegister}
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="white" />
+          <>
+            <ActivityIndicator color="#FFFFFF" />
+
+            <Text style={styles.loadingText}>
+              {loadingMessage}
+            </Text>
+          </>
         ) : (
-          <Text style={styles.buttonText}>Register as Student</Text>
+          <Text style={styles.buttonText}>
+            Register as Student
+          </Text>
         )}
       </TouchableOpacity>
 
-      
-{/* Admin Login Button */}
-<TouchableOpacity
-  style={styles.adminButton}
-  onPress={() => router.push("/admin/login" as any)}
->
-  <Text style={styles.adminButtonText}>Admin Login</Text>
-</TouchableOpacity>
 
-
-      <TouchableOpacity onPress={() => router.push("/")}>
+      <TouchableOpacity
+        onPress={() => router.push("/")}
+        disabled={loading}
+      >
         <Text style={styles.loginText}>
           Already have an account? Login
         </Text>
@@ -161,18 +217,21 @@ const styles = StyleSheet.create({
     padding: 25,
     backgroundColor: "#FFFFFF",
   },
+
   title: {
     fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 8,
   },
+
   subtitle: {
     fontSize: 15,
     textAlign: "center",
     marginBottom: 25,
     color: "#666666",
   },
+
   input: {
     borderWidth: 1,
     borderColor: "#CCCCCC",
@@ -181,6 +240,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     fontSize: 15,
   },
+
   button: {
     backgroundColor: "#8B5CF6",
     padding: 15,
@@ -188,31 +248,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
   },
+
+  disabledButton: {
+    opacity: 0.7,
+  },
+
   buttonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "bold",
   },
-  adminButton: {
-    backgroundColor: "#1A1A1A",
-    borderWidth: 1,
-    borderColor: "#8B5CF6",
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 15,
+
+  loadingText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    marginTop: 8,
+    fontWeight: "600",
   },
-  adminButtonText: {
-    color: "#A78BFA",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+
+
   loginText: {
     textAlign: "center",
     marginTop: 20,
     fontSize: 15,
     color: "#8B5CF6",
   },
+
   passwordInfo: {
     fontSize: 12,
     color: "#666666",

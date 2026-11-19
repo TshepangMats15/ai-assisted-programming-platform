@@ -1,164 +1,36 @@
-import React, { useCallback, useEffect, useState } from "react";
+
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  SafeAreaView,
+  ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { signOut } from "firebase/auth";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import api from "../../services/api";
+import { auth } from "../../services/firebase";
+import { setAuthToken as setServicesAuthToken } from "../../services/api";
+import { setAuthToken as setConstantsAuthToken } from "../../constants/api";
 import { useAppTheme } from "../../context/ThemeContext";
 
-interface Student {
-  id: string;
-  fullName: string;
-  email: string;
-  role: string;
-}
+export default function AdminSettingsPage() {
+  const { isDark, colors, toggleTheme } = useAppTheme();
+  const [loggingOut, setLoggingOut] = useState(false);
 
-export default function StudentsSettingsPage() {
-  const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const user = auth.currentUser;
 
-  const { isDark: isDarkMode, colors, toggleTheme } = useAppTheme();
-
-  
-const [loadError, setLoadError] = useState<string | null>(null);
-
-const fetchStudents = useCallback(async () => {
-  try {
-    setLoading(true);
-    setLoadError(null);
-
-    const response = await api.users.getFirebaseStudents();
-
-    console.log(
-      "[Admin Settings] Users API response:",
-      response
-    );
-
-    const data: any = response;
-
-    const users = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.users)
-      ? data.users
-      : Array.isArray(data?.content)
-      ? data.content
-      : Array.isArray(data?.data)
-      ? data.data
-      : null;
-
-    if (!users) {
-      throw new Error(
-        "The users API returned an unexpected response format."
-      );
-    }
-
-    const studentsList: Student[] = users
-      .filter((user: any) => {
-        const role = String(
-          user?.role ?? user?.userRole ?? ""
-        )
-          .trim()
-          .toUpperCase()
-          .replace(/^ROLE_/, "");
-
-        return role === "STUDENT";
-      })
-      .map((user: any, index: number) => ({
-        id: String(
-          user.uid ??
-          user.id ??
-          user.userID ??
-          user.userId ??
-          `student-${index}`
-        ),
-        fullName:
-          user.fullName ??
-          user.full_name ??
-          user.displayName ??
-          user.name ??
-          "Unnamed student",
-        email: user.email ?? "No email",
-        role: "STUDENT",
-      }));
-
-    console.log(
-      "[Admin Settings] Students found:",
-      studentsList.length
-    );
-
-    setStudents(studentsList);
-  } catch (error: any) {
-    console.error(
-      "[Admin Settings] Failed to fetch students:",
-      error
-    );
-
-    setLoadError(
-      error?.message || "Unable to load students."
-    );
-
-    setStudents([]);
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-}, []);
-
-
-  useEffect(() => {
-    fetchStudents();
-  }, [fetchStudents]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchStudents();
-  };
-
-  const upgradeToAdmin = (studentId: string, studentName: string) => {
-    Alert.alert(
-      "Confirm Upgrade",
-      `Are you sure you want to make ${studentName} an Admin? They will have full access to the admin dashboard.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Upgrade",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const student = students.find((item) => item.id === studentId);
-              if (!student) throw new Error("Student could not be found.");
-
-              await api.users.update(studentId, {
-                fullName: student.fullName,
-                email: student.email,
-                role: "ADMIN",
-              });
-
-              Alert.alert("Success", `${studentName} is now an admin.`);
-              setStudents((prev) =>
-                prev.filter((item) => item.id !== studentId)
-              );
-            } catch (error: any) {
-              Alert.alert(
-                "Error",
-                error?.message || "Error updating student role."
-              );
-            }
-          },
-        },
-      ]
-    );
-  };
+  const background = colors.background;
+  const cardBackground = colors.backgroundElement;
+  const primaryText = isDark ? "#F5F7FA" : "#1A1A1A";
+  const secondaryText = isDark ? "#A0A0A0" : "#667085";
+  const borderColor = isDark ? "#303030" : "#E5E7EB";
 
   const goBack = () => {
     if (router.canGoBack()) {
@@ -168,218 +40,408 @@ const fetchStudents = useCallback(async () => {
     }
   };
 
-  const dynamicStyles = getStyles(colors, isDarkMode);
+  const performLogout = async () => {
+    if (loggingOut) return;
 
-  const renderItem = ({ item }: { item: Student }) => (
-    <View style={dynamicStyles.card}>
-      <View style={dynamicStyles.infoContainer}>
-        <Text style={dynamicStyles.name}>{item.fullName}</Text>
-        <Text style={dynamicStyles.email}>{item.email}</Text>
-      </View>
-      <TouchableOpacity
-        style={dynamicStyles.upgradeButton}
-        onPress={() => upgradeToAdmin(item.id, item.fullName)}
-        activeOpacity={0.75}
+    try {
+      setLoggingOut(true);
+
+      await signOut(auth);
+
+      // Clear both API clients used by the login screen.
+      setServicesAuthToken(null);
+      setConstantsAuthToken(null);
+
+      // Return to src/app/index.tsx (the login screen).
+      router.replace("/");
+    } catch (error: any) {
+      Alert.alert(
+        "Logout Failed",
+        error?.message || "Unable to log out. Please try again."
+      );
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
+  const confirmLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out of DevMate?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: performLogout,
+        },
+      ]
+    );
+  };
+
+  const SettingRow = ({
+    icon,
+    title,
+    subtitle,
+    onPress,
+    rightContent,
+    danger = false,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    title: string;
+    subtitle?: string;
+    onPress?: () => void;
+    rightContent?: React.ReactNode;
+    danger?: boolean;
+  }) => (
+    <TouchableOpacity
+      style={[styles.settingRow, { borderBottomColor: borderColor }]}
+      onPress={onPress}
+      disabled={!onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      accessibilityRole={onPress ? "button" : undefined}
+    >
+      <View
+        style={[
+          styles.iconContainer,
+          {
+            backgroundColor: danger
+              ? isDark
+                ? "#402020"
+                : "#FEECEC"
+              : isDark
+              ? "#29243B"
+              : "#F0EAFF",
+          },
+        ]}
       >
-        <Text style={dynamicStyles.upgradeText}>Make Admin</Text>
-      </TouchableOpacity>
-    </View>
+        <Ionicons
+          name={icon}
+          size={21}
+          color={danger ? "#EF4444" : "#8B5CF6"}
+        />
+      </View>
+
+      <View style={styles.settingInfo}>
+        <Text
+          style={[
+            styles.settingTitle,
+            { color: danger ? "#EF4444" : primaryText },
+          ]}
+        >
+          {title}
+        </Text>
+
+        {subtitle ? (
+          <Text style={[styles.settingSubtitle, { color: secondaryText }]}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+
+      {rightContent ??
+        (onPress ? (
+          <Ionicons
+            name="chevron-forward"
+            size={19}
+            color={secondaryText}
+          />
+        ) : null)}
+    </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={dynamicStyles.container}>
-      {/* HEADER WITH BACK BUTTON AND THEME TOGGLE */}
-      <View style={dynamicStyles.headerContainer}>
-        <View style={dynamicStyles.headerLeft}>
-          <TouchableOpacity
-            style={dynamicStyles.backButton}
-            onPress={goBack}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-          >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color={isDarkMode ? "#FFFFFF" : "#111111"}
-            />
-          </TouchableOpacity>
-          <Text style={dynamicStyles.headerTitle}>Admin Settings</Text>
-        </View>
-
+    <SafeAreaView style={[styles.container, { backgroundColor: background }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: cardBackground,
+            borderBottomColor: borderColor,
+          },
+        ]}
+      >
         <TouchableOpacity
-          style={dynamicStyles.themeButton}
-          onPress={toggleTheme}
+          onPress={goBack}
+          style={styles.backButton}
+          accessibilityLabel="Go back"
           accessibilityRole="button"
-          accessibilityLabel="Toggle appearance"
         >
-          <Text style={dynamicStyles.themeButtonText}>
-            {isDarkMode ? "☀️ Light" : "🌙 Dark"}
-          </Text>
+          <Ionicons name="arrow-back" size={24} color={primaryText} />
         </TouchableOpacity>
-      </View>
 
-      <View style={dynamicStyles.subHeader}>
-        <Text style={dynamicStyles.subHeaderTitle}>Manage Students</Text>
-        <Text style={dynamicStyles.subHeaderSubtitle}>
-          Promote students to platform administrators.
+        <Text style={[styles.headerTitle, { color: primaryText }]}>
+          Admin Settings
         </Text>
+
+        <View style={styles.headerSpacer} />
       </View>
 
-      {loading && !refreshing ? (
-        <View style={dynamicStyles.centerContainer}>
-          <ActivityIndicator size="large" color="#8B5CF6" />
-          <Text style={dynamicStyles.loadingText}>Loading students...</Text>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ADMIN PROFILE */}
+        <View
+          style={[
+            styles.profileCard,
+            {
+              backgroundColor: cardBackground,
+              borderColor,
+            },
+          ]}
+        >
+          <View style={styles.avatar}>
+            <Ionicons name="person" size={32} color="#FFFFFF" />
+          </View>
+
+          <Text style={[styles.profileName, { color: primaryText }]}>
+            {user?.displayName || "Administrator"}
+          </Text>
+
+          <Text style={[styles.profileEmail, { color: secondaryText }]}>
+            {user?.email || "No email available"}
+          </Text>
+
+          <View style={styles.roleBadge}>
+            <Ionicons name="shield-checkmark" size={14} color="#8B5CF6" />
+            <Text style={styles.roleText}>Admin Account</Text>
+          </View>
         </View>
-      ) : (
-        <FlatList
-          data={students}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={dynamicStyles.listContent}
-          refreshing={refreshing}
-          onRefresh={handleRefresh}
-          ListEmptyComponent={
-            <View style={dynamicStyles.emptyContainer}>
-              <Ionicons
-                name="people-outline"
-                size={40}
-                color={isDarkMode ? "#666666" : "#A0A0A0"}
+
+        {/* APPEARANCE */}
+        <Text style={[styles.sectionTitle, { color: secondaryText }]}>
+          APPEARANCE
+        </Text>
+
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: cardBackground, borderColor },
+          ]}
+        >
+          <SettingRow     
+            icon={isDark ? "moon-outline" : "sunny-outline"}
+            title="Dark Mode"
+            subtitle="Change the appearance of DevMate"
+            rightContent={
+              <Switch
+                value={isDark}
+                onValueChange={toggleTheme}
+                trackColor={{ false: "#D1D5DB", true: "#A78BFA" }}
+                thumbColor={isDark ? "#8B5CF6" : "#FFFFFF"}
+                accessibilityLabel="Toggle dark mode"
               />
-            <Text style={dynamicStyles.emptyText}>
-              {loadError ?? "No students found."}
-            </Text>  
-            </View>
-          }
-        />
-      )}
+            }
+          />
+        </View>
+
+        {/* ACCOUNT */}
+        <Text style={[styles.sectionTitle, { color: secondaryText }]}>
+          ACCOUNT
+        </Text>
+
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: cardBackground, borderColor },
+          ]}
+        >
+          <SettingRow
+            icon="mail-outline"
+            title="Email Address"
+            subtitle={user?.email || "Not available"}
+          />
+
+          <SettingRow
+            icon="shield-checkmark-outline"
+            title="Account Type"
+            subtitle="Administrator"
+          />
+
+          <SettingRow
+            icon="checkmark-circle-outline"
+            title="Email Verification"
+            subtitle={
+              user?.emailVerified
+                ? "Verified email address"
+                : "Email not verified"
+            }
+          />
+        </View>
+
+        {/* APPLICATION INFORMATION */}
+        <Text style={[styles.sectionTitle, { color: secondaryText }]}>
+          APPLICATION
+        </Text>
+
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: cardBackground, borderColor },
+          ]}
+        >
+          <SettingRow
+            icon="code-slash-outline"
+            title="Application"
+            subtitle="DevMate — AI-Assisted Programming Platform"
+          />
+
+          <SettingRow
+            icon="information-circle-outline"
+            title="About DevMate"
+            subtitle="Learning and administration platform"
+          />
+        </View>
+
+        {/* SESSION */}
+        <Text style={[styles.sectionTitle, { color: secondaryText }]}>
+          SESSION
+        </Text>
+
+        <View
+          style={[
+            styles.sectionCard,
+            { backgroundColor: cardBackground, borderColor },
+          ]}
+        >
+          <SettingRow
+            icon="log-out-outline"
+            title={loggingOut ? "Logging Out..." : "Log Out"}
+            subtitle="Sign out of your administrator account"
+            onPress={loggingOut ? undefined : confirmLogout}
+            danger
+            rightContent={
+              loggingOut ? (
+                <ActivityIndicator size="small" color="#EF4444" />
+              ) : (
+                <Ionicons
+                  name="chevron-forward"
+                  size={19}
+                  color="#EF4444"
+                />
+              )
+            }
+          />
+        </View>
+
+        <Text style={[styles.footer, { color: secondaryText }]}>
+          DevMate Administration
+        </Text>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const getStyles = (
-  colors: {
-    background: string;
-    backgroundElement: string;
-    backgroundSelected: string;
-    text: string;
-    textSecondary: string;
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
   },
-  isDarkMode: boolean
-) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    headerContainer: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      backgroundColor: colors.backgroundElement,
-      borderBottomWidth: 1,
-      borderBottomColor: isDarkMode ? "#292929" : "#E1E8ED",
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-    },
-    headerLeft: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    backButton: {
-      padding: 6,
-      marginRight: 10,
-    },
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: "bold",
-      color: isDarkMode ? "#F5F7FA" : "#1A1A1A",
-    },
-    themeButton: {
-      paddingVertical: 6,
-      paddingHorizontal: 12,
-      backgroundColor: colors.backgroundSelected,
-      borderRadius: 20,
-    },
-    themeButtonText: {
-      color: isDarkMode ? "#F5F7FA" : "#333333",
-      fontSize: 13,
-      fontWeight: "600",
-    },
-    subHeader: {
-      paddingHorizontal: 20,
-      paddingTop: 18,
-      paddingBottom: 8,
-    },
-    subHeaderTitle: {
-      fontSize: 18,
-      fontWeight: "bold",
-      color: isDarkMode ? "#FFFFFF" : "#111111",
-    },
-    subHeaderSubtitle: {
-      fontSize: 13,
-      color: isDarkMode ? "#A0A0A0" : "#666666",
-      marginTop: 4,
-    },
-    listContent: {
-      padding: 16,
-      paddingBottom: 40,
-    },
-    centerContainer: {
-      flex: 1,
-      justifyContent: "center",
-      alignItems: "center",
-    },
-    loadingText: {
-      marginTop: 12,
-      fontSize: 13,
-      color: isDarkMode ? "#A0A0A0" : "#666666",
-    },
-    card: {
-      flexDirection: "row",
-      backgroundColor: isDarkMode ? "#1A1A1A" : "#FFFFFF",
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      alignItems: "center",
-      justifyContent: "space-between",
-      borderWidth: 1,
-      borderColor: isDarkMode ? "#292929" : "#E5E7EB",
-      elevation: 2,
-    },
-    infoContainer: {
-      flex: 1,
-      paddingRight: 12,
-    },
-    name: {
-      fontSize: 15,
-      fontWeight: "600",
-      color: isDarkMode ? "#F5F7FA" : "#1A1A1A",
-    },
-    email: {
-      fontSize: 13,
-      color: isDarkMode ? "#A0A0A0" : "#666666",
-      marginTop: 4,
-    },
-    upgradeButton: {
-      backgroundColor: "#8B5CF6",
-      paddingVertical: 9,
-      paddingHorizontal: 14,
-      borderRadius: 8,
-    },
-    upgradeText: {
-      color: "#FFFFFF",
-      fontWeight: "bold",
-      fontSize: 13,
-    },
-    emptyContainer: {
-      alignItems: "center",
-      justifyContent: "center",
-      marginTop: 60,
-    },
-    emptyText: {
-      textAlign: "center",
-      color: isDarkMode ? "#A0A0A0" : "#666666",
-      marginTop: 12,
-      fontSize: 15,
-    },
-  });
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 12,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  headerSpacer: {
+    width: 24,
+  },
+  scrollContent: {
+    padding: 18,
+    paddingBottom: 45,
+  },
+  profileCard: {
+    alignItems: "center",
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    marginBottom: 24,
+  },
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "#8B5CF6",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  profileName: {
+    fontSize: 19,
+    fontWeight: "700",
+    marginBottom: 5,
+  },
+  profileEmail: {
+    fontSize: 14,
+    textAlign: "center",
+  },
+  roleBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#F0EAFF",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    marginTop: 14,
+  },
+  roleText: {
+    color: "#7C3AED",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 1,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    marginBottom: 24,
+    overflow: "hidden",
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 15,
+    paddingVertical: 15,
+  },
+  iconContainer: {
+    width: 42,
+    height: 42,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 13,
+  },
+  settingInfo: {
+    flex: 1,
+  },
+  settingTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  settingSubtitle: {
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  footer: {
+    textAlign: "center",
+    fontSize: 12,
+    marginTop: 8,
+  },
+});

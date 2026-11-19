@@ -129,8 +129,13 @@ export interface AnnouncementDTO {
   id?: string | number;
   title: string;
   message: string;
-  audience: string;
+  audience?: string;
   createdAt?: string;
+}
+
+export interface AnnouncementRequest {
+  title: string;
+  message: string;
 }
 
 export interface UserDTO {
@@ -146,47 +151,22 @@ export interface UserDTO {
 // ================= AUTH TOKEN =================
 
 let authToken: string | null = null;
-let tokenLoaded = false;
 
-// Call this after login (and again whenever the token refreshes).
-// Pass null on logout.
+// Retained for compatibility with existing screens.
+// Cached tokens are never used to authorize HTTP requests.
 export function setAuthToken(token: string | null) {
-  authToken = token;
-  tokenLoaded = true;
+  authToken = auth.currentUser ? token : null;
 
-  if (token) {
-    AsyncStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token).catch(
-      () => {}
-    );
-  } else {
-    AsyncStorage.removeItem(AUTH_TOKEN_STORAGE_KEY).catch(
-      () => {}
-    );
-  }
+  // Remove tokens persisted by the previous implementation.
+  AsyncStorage.removeItem(AUTH_TOKEN_STORAGE_KEY).catch(
+    () => {}
+  );
 }
 
 export function getAuthToken(): string | null {
-  return authToken;
+  return auth.currentUser ? authToken : null;
 }
 
-// Restore a saved token the first time a request is made
-async function ensureTokenLoaded(): Promise<void> {
-  if (tokenLoaded) {
-    return;
-  }
-
-  tokenLoaded = true;
-
-  try {
-    const stored = await AsyncStorage.getItem(
-      AUTH_TOKEN_STORAGE_KEY
-    );
-
-    if (stored && !authToken) {
-      authToken = stored;
-    }
-  } catch {}
-}
 
 // ================= HTTP CLIENT =================
 
@@ -194,65 +174,45 @@ export async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  await ensureTokenLoaded();
+    await auth.authStateReady();
 
   const url = `${API_BASE_URL}${
     endpoint.startsWith("/") ? endpoint : `/${endpoint}`
   }`;
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    ...(options.headers as Record<string, string>),
-  };
+  const headers = new Headers(options.headers);
 
+  headers.set("Content-Type", "application/json");
+  headers.set("Accept", "application/json");
 
+  // Never accept a cached or externally supplied token.
+  headers.delete("Authorization");
 
+  const firebaseUser = auth.currentUser;
 
-const firebaseUser = auth.currentUser;
+  if (firebaseUser) {
+    try {
+      const token = await firebaseUser.getIdToken();
 
-if (endpoint === "/admin/students") {
-  if (!firebaseUser) {
-    throw new Error("Please sign in before accessing admin students.");
+      if (auth.currentUser !== firebaseUser) {
+        throw new Error("Authentication session changed.");
+      }
+
+      headers.set("Authorization", `Bearer ${token}`);
+    } catch {
+      throw new Error(
+        "Could not authenticate with Firebase. Please sign in again."
+      );
+    }
   }
 
-  const token = await firebaseUser.getIdToken(true);
-
-  headers["Authorization"] = `Bearer ${token}`;
-} else if (firebaseUser) {
-  const token = await firebaseUser.getIdToken();
-  headers["Authorization"] = `Bearer ${token}`;
-} else if (authToken) {
-  headers["Authorization"] = `Bearer ${authToken}`;
-}
-
-
-if (firebaseUser) {
-  try {
-    const firebaseIdToken = await firebaseUser.getIdToken();
-
-    headers["Authorization"] = `Bearer ${firebaseIdToken}`;
-  } catch (error) {
-    console.error("[api] Failed to obtain Firebase ID token:", error);
-    throw new Error("Could not authenticate with Firebase. Please sign in again.");
+  if (__DEV__) {
+    console.log("[API AUTH]", {
+      endpoint,
+      authenticated: !!firebaseUser,
+      hasAuthorizationHeader: headers.has("Authorization"),
+    });
   }
-} else if (endpoint === "/admin/students") {
-  throw new Error(
-    "No Firebase user is signed in. Please sign in as an admin."
-  );
-} else if (authToken) {
-  // Preserve the existing behavior for other API endpoints.
-  headers["Authorization"] = `Bearer ${authToken}`;
-}
-
-
-if (__DEV__ && endpoint === "/admin/students") {
-  console.log("[Firebase diagnostics]", {
-    currentUserExists: !!auth.currentUser,
-    firebaseUid: auth.currentUser?.uid ?? null,
-    authorizationHeaderPresent: !!headers["Authorization"],
-  });
-}
 
   const controller = new AbortController();
 
@@ -330,27 +290,30 @@ if (__DEV__ && endpoint === "/admin/students") {
     throw new Error(errorMessage);
   }
 
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  const contentType = response.headers.get("content-type");
-
-  if (
-    contentType &&
-    contentType.includes("application/json")
-  ) {
-    return response.json();
+    if (response.status === 204) {
+    return undefined as T;
   }
 
   const text = await response.text();
 
+  if (!text.trim()) {
+    return undefined as T;
+  }
+
+  const contentType =
+    response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    return JSON.parse(text) as T;
+  }
+
   try {
-    return JSON.parse(text);
+    return JSON.parse(text) as T;
   } catch {
     return text as unknown as T;
   }
 }
+
 
 // ================= LOCAL COURSEWORK =================
 
@@ -611,38 +574,44 @@ export const api = {
 
   // ================= ANNOUNCEMENTS =================
 
-  announcements: {
-    getAll: (): Promise<AnnouncementDTO[]> =>
-      request<AnnouncementDTO[]>("/announcements", {
-        method: "GET",
+ announcements: {
+  getAll: (): Promise<AnnouncementDTO[]> =>
+    request<AnnouncementDTO[]>("/announcements", {
+      method: "GET",
+    }),
+
+  create: (
+    data: AnnouncementRequest
+  ): Promise<AnnouncementDTO> =>
+    request<AnnouncementDTO>("/announcements", {
+      method: "POST",
+      body: JSON.stringify({
+        title: data.title,
+        message: data.message,
       }),
+    }),
 
-    create: (
-      data: AnnouncementDTO
-    ): Promise<AnnouncementDTO> =>
-      request<AnnouncementDTO>("/announcements", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+  update: (
+    id: string | number,
+    data: AnnouncementRequest
+  ): Promise<AnnouncementDTO> =>
+    request<AnnouncementDTO>(
+      `/announcements/${encodeURIComponent(String(id))}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          title: data.title,
+          message: data.message,
+        }),
+      }
+    ),
 
-    update: (
-      id: string | number,
-      data: Partial<AnnouncementDTO>
-    ): Promise<AnnouncementDTO> =>
-      request<AnnouncementDTO>(
-        `/announcements/${encodeURIComponent(String(id))}`,
-        {
-          method: "PUT",
-          body: JSON.stringify(data),
-        }
-      ),
-
-    delete: (id: string | number): Promise<void> =>
-      request<void>(
-        `/announcements/${encodeURIComponent(String(id))}`,
-        { method: "DELETE" }
-      ),
-  },
+  delete: (id: string | number): Promise<void> =>
+    request<void>(
+      `/announcements/${encodeURIComponent(String(id))}`,
+      { method: "DELETE" }
+    ),
+},
 
   // ================= AI =================
 
