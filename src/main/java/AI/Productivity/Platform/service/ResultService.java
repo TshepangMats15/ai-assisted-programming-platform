@@ -1,36 +1,144 @@
 package AI.Productivity.Platform.service;
 
-import AI.Productivity.Platform.dto.ResultRequest;
-import AI.Productivity.Platform.dto.ResultResponse;
 import AI.Productivity.Platform.entity.Result;
 import AI.Productivity.Platform.repository.ResultRepository;
-import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import com.devmate.Entities.Users;
+import com.devmate.Repository.UserRepository;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Service
+@Transactional(readOnly = true)
 public class ResultService {
 
     private final ResultRepository resultRepository;
+    private final UserRepository userRepository;
 
-    public ResultService(ResultRepository resultRepository) {
+    public ResultService(
+            ResultRepository resultRepository,
+            UserRepository userRepository
+    ) {
         this.resultRepository = resultRepository;
+        this.userRepository = userRepository;
     }
 
-    public ResultResponse saveResult(ResultRequest request) {
-        LocalDateTime now = LocalDateTime.now();
+    // GET ALL RESULTS FOR ADMINISTRATORS
+    public List<Result> getAllResults(String firebaseUid) {
 
-        // Creating the result using the exact flat fields from the updated Result entity
-        Result result = new Result(
-                request.userId(),
-                request.assessmentId(),
-                request.score(),
-                request.completionTime(),
-                request.aiUsage(),
-                now
+        requireAdmin(firebaseUid);
+
+        return resultRepository.findAll();
+    }
+
+    // GET RESULTS BELONGING TO THE AUTHENTICATED STUDENT
+    public List<Result> getMyResults(String firebaseUid) {
+
+        Users user = requireUser(firebaseUid);
+
+        return resultRepository.findByUserId(
+                user.getId()
         );
+    }
 
-        Result savedResult = resultRepository.save(result);
-        return new ResultResponse(savedResult.getResultId(), "Result successfully saved.", now);
+    // ADMIN: GET RESULTS FOR A SPECIFIC STUDENT
+    public List<Result> getStudentResults(
+            String adminUid,
+            String studentFirebaseUid
+    ) {
+
+        requireAdmin(adminUid);
+
+        Users student = requireUser(studentFirebaseUid);
+
+        return resultRepository.findByUserId(
+                student.getId()
+        );
+    }
+
+    // ADMIN: GET ALL RESULTS FOR A SPECIFIC ASSESSMENT
+    public List<Result> getAllAssessmentResults(
+            String firebaseUid,
+            Integer assessmentId
+    ) {
+
+        requireAdmin(firebaseUid);
+
+        validateAssessmentId(assessmentId);
+
+        return resultRepository.findByAssessmentId(
+                assessmentId
+        );
+    }
+
+    // GET ONE STUDENT'S RESULTS FOR AN ASSESSMENT
+    public List<Result> getMyAssessmentResults(
+            String firebaseUid,
+            Integer assessmentId
+    ) {
+
+        Users user = requireUser(firebaseUid);
+
+        validateAssessmentId(assessmentId);
+
+        return resultRepository.findByUserId(
+                user.getId()
+        ).stream()
+         .filter(result ->
+                 assessmentId.equals(result.getAssessmentId())
+         )
+         .toList();
+    }
+
+    // VERIFY ADMINISTRATOR ROLE
+    private void requireAdmin(String firebaseUid) {
+
+        Users user = requireUser(firebaseUid);
+
+        if (!"ADMIN".equalsIgnoreCase(user.getRole())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Administrator access required."
+            );
+        }
+    }
+
+    // VALIDATE ASSESSMENT ID
+    private void validateAssessmentId(Integer assessmentId) {
+
+        if (assessmentId == null || assessmentId <= 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "A valid assessment ID is required."
+            );
+        }
+    }
+
+    // RESOLVE FIREBASE UID TO INTERNAL MYSQL USER ID
+    private Users requireUser(String firebaseUid) {
+
+        if (firebaseUid == null || firebaseUid.isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication required."
+            );
+        }
+
+        return userRepository
+                .findByFirebaseUid(firebaseUid)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "User account not found."
+                        )
+                );
     }
 }

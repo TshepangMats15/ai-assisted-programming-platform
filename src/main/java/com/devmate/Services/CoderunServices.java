@@ -23,10 +23,14 @@ public class CoderunServices {
     private static final int MAX_STDIN_CHARS = 10_000;
     private static final int MAX_OUTPUT_CHARS = 20_000;
 
+    private static final int MAX_POLL_ATTEMPTS = 15;
+    private static final long POLL_INTERVAL_MS = 1000;
+
     private static final Map<String, Integer> LANGUAGE_IDS = Map.of(
         "java", 62,
         "python", 71,
         "cpp", 54,
+        "c++", 54,
         "c", 50,
         "javascript", 63,
         "typescript", 74,
@@ -90,9 +94,9 @@ public class CoderunServices {
             ? ""
             : language.trim().toLowerCase(Locale.ROOT);
 
-        if (key.equals("html") || key.equals("css")) {
+        if ("html".equals(key) || "css".equals(key)) {
             throw new IllegalArgumentException(
-                "HTML and CSS cannot be executed by this code runner."
+                "HTML and CSS cannot be executed by Judge0."
             );
         }
 
@@ -105,29 +109,73 @@ public class CoderunServices {
         }
 
         Map<String, Object> payload = new LinkedHashMap<>();
-
         payload.put("language_id", languageId);
         payload.put("source_code", sourceCode);
         payload.put("stdin", stdin == null ? "" : stdin);
 
-        Map<String, Object> body;
+        // Submit asynchronously. Do not use wait=true.
+        Map<String, Object> submission = postSubmission(payload);
 
+        Object tokenValue = submission.get("token");
+
+        if (tokenValue == null ||
+            String.valueOf(tokenValue).isBlank()) {
+            throw new IllegalStateException(
+                "Judge0 did not return a submission token."
+            );
+        }
+
+        String token = String.valueOf(tokenValue);
+
+        // Poll Judge0 until execution finishes.
+        for (int attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+            try {
+                Thread.sleep(POLL_INTERVAL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(
+                    "Code execution was interrupted."
+                );
+            }
+
+            Map<String, Object> result = getSubmission(token);
+
+            Object statusObject = result.get("status");
+
+            if (!(statusObject instanceof Map<?, ?> statusMap)) {
+                continue;
+            }
+
+            Object statusId = statusMap.get("id");
+
+            if (!(statusId instanceof Number)) {
+                continue;
+            }
+
+            int id = ((Number) statusId).intValue();
+
+            // Judge0 status 1 = In Queue, 2 = Processing.
+            if (id == 1 || id == 2) {
+                continue;
+            }
+
+            return formatResult(result);
+        }
+
+        throw new IllegalStateException(
+            "Code execution is taking too long. Please try again."
+        );
+    }
+
+    private Map<String, Object> postSubmission(
+        Map<String, Object> payload
+    ) {
         try {
-            body = client.post()
-                .uri("/submissions?base64_encoded=false&wait=true")
+            Map<String, Object> response = client.post()
+                .uri("/submissions?base64_encoded=false&wait=false")
                 .contentType(MediaType.APPLICATION_JSON)
                 .accept(MediaType.APPLICATION_JSON)
-                .headers(headers -> {
-                    if (!apiKey.isEmpty()) {
-                        if (host != null &&
-                            host.endsWith("rapidapi.com")) {
-                            headers.set("X-RapidAPI-Key", apiKey);
-                            headers.set("X-RapidAPI-Host", host);
-                        } else {
-                            headers.set("X-Auth-Token", apiKey);
-                        }
-                    }
-                })
+                .headers(this::addAuthHeaders)
                 .body(payload)
                 .retrieve()
                 .body(
@@ -136,82 +184,165 @@ public class CoderunServices {
                     >() {}
                 );
 
+            if (response == null) {
+                throw new IllegalStateException(
+                    "Judge0 returned an empty submission response."
+                );
+            }
+
+            return response;
+
         } catch (RestClientResponseException e) {
-            int statusCode = e.getStatusCode().value();
-
-            if (statusCode == 429) {
-                throw new IllegalStateException(
-                    "The code runner is busy. Please try again later."
-                );
-            }
-
-            if (statusCode == 400 || statusCode == 422) {
-                throw new IllegalStateException(
-                    "Judge0 rejected the submission (" +
-                    statusCode +
-                    "). Check the selected language and " +
-                    "Judge0 server configuration."
-                );
-            }
-
-            throw new IllegalStateException(
-                "Judge0 request failed with HTTP " + statusCode
-            );
+            throw judge0Error(e);
         }
-
-        if (body == null) {
-            throw new IllegalStateException(
-                "Judge0 returned an empty response."
-            );
-        }
-
-        if (body.containsKey("token") &&
-            !body.containsKey("status")) {
-            throw new IllegalStateException(
-                "Judge0 returned a pending submission. " +
-                "This server requires asynchronous result polling."
-            );
-        }
-
-        String statusText = "Unknown";
-        Object status = body.get("status");
-
-        if (status instanceof Map<?, ?> statusMap) {
-            Object description = statusMap.get("description");
-
-            if (description != null) {
-                statusText = String.valueOf(description);
-            }
-        }
-
-        Map<String, Object> result = new LinkedHashMap<>();
-
-        result.put("stdout", clip(body.get("stdout")));
-        result.put("stderr", clip(body.get("stderr")));
-        result.put(
-            "compileOutput",
-            clip(body.get("compile_output"))
-        );
-        result.put("status", statusText);
-        result.put(
-            "time",
-            body.get("time") == null
-                ? ""
-                : String.valueOf(body.get("time"))
-        );
-        result.put("memory", body.get("memory"));
-
-        return result;
     }
+
+    private Map<String, Object> getSubmission(String token) {
+        try {
+            Map<String, Object> response = client.get()
+                .uri(
+                    "/submissions/{token}?base64_encoded=false",
+                    token
+                )
+                .accept(MediaType.APPLICATION_JSON)
+                .headers(this::addAuthHeaders)
+                .retrieve()
+                .body(
+                    new ParameterizedTypeReference<
+                        Map<String, Object>
+                    >() {}
+                );
+
+            if (response == null) {
+                throw new IllegalStateException(
+                    "Judge0 returned an empty execution response."
+                );
+            }
+
+            return response;
+
+        } catch (RestClientResponseException e) {
+            throw judge0Error(e);
+        }
+    }
+
+    private void addAuthHeaders(
+        org.springframework.http.HttpHeaders headers
+    ) {
+        if (apiKey.isEmpty()) {
+            return;
+        }
+
+        if (host != null &&
+            host.endsWith("rapidapi.com")) {
+            headers.set("X-RapidAPI-Key", apiKey);
+            headers.set("X-RapidAPI-Host", host);
+        } else {
+            headers.set("X-Auth-Token", apiKey);
+        }
+    }
+
+    private IllegalStateException judge0Error(
+        RestClientResponseException e
+    ) {
+        int statusCode = e.getStatusCode().value();
+
+        if (statusCode == 429) {
+            return new IllegalStateException(
+                "Judge0 rate limit reached. Please try again later."
+            );
+        }
+
+        if (statusCode == 401 || statusCode == 403) {
+            return new IllegalStateException(
+                "Judge0 access denied (HTTP " + statusCode +
+                "). Check your RapidAPI subscription, API key, " +
+                "and endpoint configuration."
+            );
+        }
+
+        String details = e.getResponseBodyAsString();
+
+        if (details == null || details.isBlank()) {
+            details = "No additional details provided.";
+        }
+
+        if (details.length() > 500) {
+            details = details.substring(0, 500);
+        }
+
+        return new IllegalStateException(
+            "Judge0 request failed (HTTP " +
+            statusCode + "): " + details
+        );
+    }
+
+    
+private Map<String, Object> formatResult(
+        Map<String, Object> body
+) {
+    String statusText = "Unknown";
+    Object statusId = null;
+
+    Object status = body.get("status");
+
+    if (status instanceof Map<?, ?> statusMap) {
+        Object description = statusMap.get("description");
+
+        if (description != null) {
+            statusText = String.valueOf(description);
+        }
+
+        statusId = statusMap.get("id");
+    }
+
+    Map<String, Object> result = new LinkedHashMap<>();
+
+    Object rawStdout = body.get("stdout");
+
+boolean stdoutTruncated =
+        rawStdout != null &&
+        String.valueOf(rawStdout).length()
+                > MAX_OUTPUT_CHARS;
+
+result.put("stdout", clip(rawStdout));
+
+result.put(
+        "stdoutTruncated",
+        stdoutTruncated
+);
+    result.put("stderr", clip(body.get("stderr")));
+    result.put(
+        "compileOutput",
+        clip(body.get("compile_output"))
+    );
+    result.put("status", statusText);
+
+    // Required for automatic grading
+    result.put("statusId", statusId);
+
+    result.put(
+        "time",
+        body.get("time") == null
+            ? ""
+            : String.valueOf(body.get("time"))
+    );
+    result.put("memory", body.get("memory"));
+
+    return result;
+}
+
 
     private static String clip(Object value) {
         String text = value == null
             ? ""
             : String.valueOf(value);
 
-        return text.length() <= MAX_OUTPUT_CHARS
-            ? text
-            : text.substring(0, MAX_OUTPUT_CHARS)
-                + "\n...output truncated...";
+        if (text.length() <= MAX_OUTPUT_CHARS) {
+            return text;
+        }
+
+        return text.substring(0, MAX_OUTPUT_CHARS)
+            + "\n...output truncated...";
     }
 }

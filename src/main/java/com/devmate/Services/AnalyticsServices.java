@@ -55,7 +55,7 @@ public class AnalyticsServices {
         summary.put("totalSubmissions", (int) totalSubmissions);
         summary.put("totalAIInteractions", interactions.size());
         summary.put("totalAiInteractions", interactions.size());
-        summary.put("avgSimilarityScore", 85.0); // Baseline benchmark
+        summary.put("avgSimilarityScore", null); // Baseline benchmark
         summary.put("averageCompletionTimeSeconds", averageCompletionTime(results));
         summary.put("successfulAIInteractions", countByStatus(interactions, "SUCCESS"));
         summary.put("failedAIInteractions", countByStatus(interactions, "FAILED"));
@@ -64,40 +64,70 @@ public class AnalyticsServices {
         return summary;
     }
 
-    public List<Map<String, Object>> getAIUsageAnalytics() {
-        List<Assessment> assessments = assessmentRepository.findAll();
-        List<AIInteraction> interactions = interactionRepository.findAll();
+   public List<Map<String, Object>> getAIUsageAnalytics() {
 
-        Map<Integer, List<AIInteraction>> byAssessment = interactions.stream()
-                .filter(i -> i.getAssessmentID() != null)
-                .collect(Collectors.groupingBy(AIInteraction::getAssessmentID));
+    List<Assessment> assessments =
+            assessmentRepository.findAll();
 
-        List<Map<String, Object>> list = new ArrayList<>();
+    List<AIInteraction> interactions =
+            interactionRepository.findAll();
 
-        if (assessments.isEmpty()) {
-            Map<String, Object> fallback = new LinkedHashMap<>();
-            fallback.put("id", "general-1");
-            fallback.put("course", "Python Programming");
-            fallback.put("quiz", "General Assistance");
-            fallback.put("avgRequests", interactions.size());
-            fallback.put("trend", "neutral");
-            list.add(fallback);
-            return list;
-        }
+    Map<Integer, List<AIInteraction>> byAssessment =
+            interactions.stream()
+                    .filter(i -> i.getAssessmentID() != null)
+                    .filter(i ->
+                            "SUCCESS".equalsIgnoreCase(i.getStatus())
+                    )
+                    .collect(Collectors.groupingBy(
+                            AIInteraction::getAssessmentID
+                    ));
 
-        for (Assessment a : assessments) {
-            List<AIInteraction> related = byAssessment.getOrDefault(a.getAssessmentID(), Collections.emptyList());
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", String.valueOf(a.getAssessmentID()));
-            item.put("course", a.getProgramLang() != null ? a.getProgramLang() + " Programming" : "Coursework");
-            item.put("quiz", a.getTitle());
-            item.put("avgRequests", related.size());
-            item.put("trend", related.size() > 5 ? "up" : "neutral");
-            list.add(item);
-        }
+    List<Map<String, Object>> list = new ArrayList<>();
 
-        return list;
+    for (Assessment assessment : assessments) {
+
+        List<AIInteraction> related =
+                byAssessment.getOrDefault(
+                        assessment.getAssessmentID(),
+                        Collections.emptyList()
+                );
+
+        long uniqueStudents = related.stream()
+                .map(AIInteraction::getUserID)
+                .filter(Objects::nonNull)
+                .distinct()
+                .count();
+
+        double averageRequests = uniqueStudents == 0
+                ? 0.0
+                : (double) related.size() / uniqueStudents;
+
+        Map<String, Object> item = new LinkedHashMap<>();
+
+        item.put(
+                "id",
+                String.valueOf(assessment.getAssessmentID())
+        );
+
+        item.put(
+                "course",
+                assessment.getProgramLang() != null
+                        ? assessment.getProgramLang() + " Programming"
+                        : "Coursework"
+        );
+
+        item.put("quiz", assessment.getTitle());
+        item.put("totalRequests", related.size());
+        item.put("uniqueStudents", uniqueStudents);
+        item.put("avgRequests", averageRequests);
+        item.put("aiAllowed", assessment.getAiAllowed());
+        item.put("trend", "neutral");
+
+        list.add(item);
     }
+
+    return list;
+}
 
     public Map<String, Object> getUserAnalytics(String userID) {
         validateUserId(userID);
