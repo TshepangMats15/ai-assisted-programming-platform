@@ -1,0 +1,616 @@
+import React, { useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import {
+  Alert,
+  FlatList,
+  Modal,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+type Assessment = {
+  id: number;
+  title: string;
+  question: string;
+  language: string;
+  totalMarks: number;
+  dueDate: string;
+  status: "Draft" | "Published";
+};
+
+const languages = ["Python", "Java", "JavaScript", "Web Design"];
+
+export default function ManageAssessmentsScreen() {
+  const [assessments, setAssessments] = useState<Assessment[]>([]);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("All");
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  const [title, setTitle] = useState("");
+  const [question, setQuestion] = useState("");
+  const [language, setLanguage] = useState("Python");
+  const [marks, setMarks] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [status, setStatus] = useState<"Draft" | "Published">("Draft");
+
+  const filteredAssessments = assessments.filter((item) => {
+    const matchesSearch =
+      item.title.toLowerCase().includes(search.toLowerCase()) ||
+      item.question.toLowerCase().includes(search.toLowerCase()) ||
+      item.language.toLowerCase().includes(search.toLowerCase());
+
+    return matchesSearch && (filter === "All" || item.status === filter);
+  });
+
+  function resetForm() {
+    setTitle("");
+    setQuestion("");
+    setLanguage("Python");
+    setMarks("");
+    setDueDate("");
+    setStatus("Draft");
+    setEditingId(null);
+  }
+
+  function openAdd() {
+    resetForm();
+    setModalVisible(true);
+  }
+
+  function openEdit(item: Assessment) {
+    setEditingId(item.id);
+    setTitle(item.title);
+    setQuestion(item.question);
+    setLanguage(item.language);
+    setMarks(String(item.totalMarks));
+    setDueDate(item.dueDate);
+    setStatus(item.status);
+    setModalVisible(true);
+  }
+
+  function validDate(value: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+
+    return (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    );
+  }
+
+  function saveAssessment() {
+    if (
+      !title.trim() ||
+      !question.trim() ||
+      !marks.trim() ||
+      !dueDate.trim()
+    ) {
+      Alert.alert("Missing Information", "Please complete all fields.");
+      return;
+    }
+
+    const totalMarks = Number(marks);
+
+    if (!Number.isInteger(totalMarks) || totalMarks <= 0) {
+      Alert.alert("Invalid Marks", "Enter a positive whole number.");
+      return;
+    }
+
+    if (!validDate(dueDate.trim())) {
+      Alert.alert("Invalid Date", "Use a valid date in YYYY-MM-DD format.");
+      return;
+    }
+
+    const duplicate = assessments.some(
+      (item) =>
+        item.title.toLowerCase() === title.trim().toLowerCase() &&
+        item.id !== editingId
+    );
+
+    if (duplicate) {
+      Alert.alert("Duplicate Assessment", "This title already exists.");
+      return;
+    }
+
+    if (editingId !== null) {
+      setAssessments((current) =>
+        current.map((item) =>
+          item.id === editingId
+            ? {
+                ...item,
+                title: title.trim(),
+                question: question.trim(),
+                language,
+                totalMarks,
+                dueDate: dueDate.trim(),
+                status,
+              }
+            : item
+        )
+      );
+    } else {
+      setAssessments((current) => [
+        ...current,
+        {
+          id: Date.now(),
+          title: title.trim(),
+          question: question.trim(),
+          language,
+          totalMarks,
+          dueDate: dueDate.trim(),
+          status,
+        },
+      ]);
+    }
+
+    setModalVisible(false);
+    resetForm();
+  }
+
+  function deleteAssessment(item: Assessment) {
+    Alert.alert("Delete Assessment", `Delete "${item.title}"?`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () =>
+          setAssessments((current) =>
+            current.filter((assessment) => assessment.id !== item.id)
+          ),
+      },
+    ]);
+  }
+    return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.replace("/club-admin")}>
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Manage Assessments</Text>
+      </View>
+
+      <View style={styles.content}>
+        <Text style={styles.subtitle}>
+          Create and manage coding assessments for students.
+        </Text>
+
+        <Text style={styles.notice}>
+          Local preview: assessments are not yet saved to the database.
+        </Text>
+
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryNumber}>{assessments.length}</Text>
+            <Text style={styles.summaryLabel}>Total</Text>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryNumber}>
+              {assessments.filter((item) => item.status === "Published").length}
+            </Text>
+            <Text style={styles.summaryLabel}>Published</Text>
+          </View>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryNumber}>
+              {assessments.filter((item) => item.status === "Draft").length}
+            </Text>
+            <Text style={styles.summaryLabel}>Drafts</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.addButton} onPress={openAdd}>
+          <Ionicons name="add-circle-outline" size={21} color="#FFFFFF" />
+          <Text style={styles.addText}>Create Assessment</Text>
+        </TouchableOpacity>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Search assessments..."
+          placeholderTextColor="#888888"
+          value={search}
+          onChangeText={setSearch}
+        />
+
+        <View style={styles.filterRow}>
+          {["All", "Draft", "Published"].map((value) => (
+            <TouchableOpacity
+              key={value}
+              style={[
+                styles.filterButton,
+                filter === value && styles.selectedButton,
+              ]}
+              onPress={() => setFilter(value)}
+            >
+              <Text style={styles.buttonText}>{value}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <FlatList
+          data={filteredAssessments}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={{ paddingBottom: 30, flexGrow: 1 }}
+          ListEmptyComponent={
+            <View style={styles.emptyCard}>
+              <Ionicons name="document-text-outline" size={38} color="#A78BFA" />
+              <Text style={styles.emptyTitle}>No assessments found</Text>
+              <Text style={styles.emptyText}>
+                {assessments.length === 0
+                  ? "Create your first coding assessment."
+                  : "Try changing your search or filter."}
+              </Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.statusText}>{item.status}</Text>
+              </View>
+
+              <Text style={styles.description}>{item.question}</Text>
+              <Text style={styles.detail}>Language: {item.language}</Text>
+              <Text style={styles.detail}>Total Marks: {item.totalMarks}</Text>
+              <Text style={styles.detail}>Due: {item.dueDate}</Text>
+
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => openEdit(item)}
+                >
+                  <Ionicons name="create-outline" size={17} color="#FFFFFF" />
+                  <Text style={styles.buttonText}>Edit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => deleteAssessment(item)}
+                >
+                  <Ionicons name="trash-outline" size={17} color="#FF6B6B" />
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
+      </View>
+            <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              <Text style={styles.modalTitle}>
+                {editingId === null
+                  ? "Create Assessment"
+                  : "Edit Assessment"}
+              </Text>
+
+              <Text style={styles.label}>Assessment Title</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Assessment title"
+                placeholderTextColor="#888888"
+                value={title}
+                onChangeText={setTitle}
+              />
+
+              <Text style={styles.label}>Coding Question</Text>
+              <TextInput
+                style={[styles.input, { minHeight: 100 }]}
+                placeholder="Enter the coding question or instructions"
+                placeholderTextColor="#888888"
+                value={question}
+                onChangeText={setQuestion}
+                multiline
+                textAlignVertical="top"
+              />
+
+              <Text style={styles.label}>Programming Language</Text>
+              <View style={styles.languageRow}>
+                {languages.map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[
+                      styles.filterButton,
+                      language === value && styles.selectedButton,
+                    ]}
+                    onPress={() => setLanguage(value)}
+                  >
+                    <Text style={styles.buttonText}>{value}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.label}>Total Marks</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 100"
+                placeholderTextColor="#888888"
+                value={marks}
+                onChangeText={setMarks}
+                keyboardType="number-pad"
+              />
+
+              <Text style={styles.label}>Due Date (YYYY-MM-DD)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="2026-10-23"
+                placeholderTextColor="#888888"
+                value={dueDate}
+                onChangeText={setDueDate}
+              />
+
+              <Text style={styles.label}>Publication Status</Text>
+              <View style={styles.filterRow}>
+                {(["Draft", "Published"] as const).map((value) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[
+                      styles.filterButton,
+                      status === value && styles.selectedButton,
+                    ]}
+                    onPress={() => setStatus(value)}
+                  >
+                    <Text style={styles.buttonText}>{value}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.saveButton}
+                  onPress={saveAssessment}
+                >
+                  <Text style={styles.buttonText}>Save Assessment</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#0D0D0D" },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 15,
+    padding: 20,
+  },
+  headerTitle: {
+    color: "#FFFFFF",
+    fontSize: 21,
+    fontWeight: "bold",
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  subtitle: {
+    color: "#AAAAAA",
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  notice: {
+    color: "#D8B4FE",
+    fontSize: 12,
+    marginBottom: 18,
+  },
+
+  summaryRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 18,
+  },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: "#211832",
+    borderRadius: 12,
+    padding: 15,
+    alignItems: "center",
+  },
+  summaryNumber: {
+    color: "#FFFFFF",
+    fontSize: 23,
+    fontWeight: "bold",
+  },
+  summaryLabel: {
+    color: "#BBBBBB",
+    fontSize: 12,
+    marginTop: 5,
+  },
+
+  addButton: {
+    backgroundColor: "#8B5CF6",
+    padding: 15,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  addText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "bold",
+  },
+  input: {
+    backgroundColor: "#292929",
+    color: "#FFFFFF",
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 15,
+  },
+
+  filterRow: {
+    flexDirection: "row",
+    marginBottom: 15,
+  },
+  filterButton: {
+    backgroundColor: "#333333",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 9,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  selectedButton: {
+    backgroundColor: "#8B5CF6",
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  emptyCard: {
+    backgroundColor: "#1A1A1A",
+    padding: 30,
+    borderRadius: 13,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  emptyTitle: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "bold",
+    marginTop: 14,
+  },
+  emptyText: {
+    color: "#AAAAAA",
+    textAlign: "center",
+    fontSize: 12,
+    marginTop: 9,
+  },
+
+  card: {
+    backgroundColor: "#1A1A1A",
+    padding: 18,
+    borderRadius: 13,
+    marginBottom: 12,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  cardTitle: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  statusText: {
+    color: "#A78BFA",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+  description: {
+    color: "#CCCCCC",
+    fontSize: 13,
+    lineHeight: 20,
+    marginVertical: 13,
+  },
+  detail: {
+    color: "#AAAAAA",
+    fontSize: 12,
+    marginBottom: 7,
+  },
+
+  actions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 15,
+  },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#312047",
+    padding: 12,
+    borderRadius: 9,
+  },
+  deleteButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#342020",
+    padding: 12,
+    borderRadius: 9,
+  },
+  deleteText: {
+    color: "#FF6B6B",
+    fontSize: 12,
+    fontWeight: "bold",
+  },
+
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center",
+    padding: 20,
+  },
+  modal: {
+    backgroundColor: "#1C1C1C",
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: "88%",
+  },
+  modalTitle: {
+    color: "#FFFFFF",
+    fontSize: 21,
+    fontWeight: "bold",
+    marginBottom: 20,
+  },
+  label: {
+    color: "#CCCCCC",
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  languageRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 12,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: "#333333",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: "#8B5CF6",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+});
