@@ -1,18 +1,18 @@
-
-import React, { useCallback, useEffect, useState } from "react";
-import { router } from "expo-router";
+import React, { useCallback, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import api from "../../constants/api";
 
@@ -33,7 +33,10 @@ type CourseUsage = {
   id: string;
   course: string;
   quiz: string;
+  totalRequests: number | null;
+  uniqueStudents: number | null;
   avgRequests: number | null;
+  aiAllowed: boolean | null;
   trend: "up" | "down" | "neutral" | null;
 };
 
@@ -110,27 +113,40 @@ export default function AdminAiUsageScreen() {
         : [];
 
       const courseUsage: CourseUsage[] = rawCourses.map(
-        (item: any, index: number) => ({
-          id: String(item?.id ?? index),
-          course:
-            typeof item?.course === "string" &&
-            item.course.trim()
-              ? item.course
-              : "Unspecified course",
-          quiz:
-            typeof item?.quiz === "string" &&
-            item.quiz.trim()
-              ? item.quiz
-              : "Unspecified topic",
-          avgRequests: readNumber(item?.avgRequests),
-          trend:
-            item?.trend === "up" ||
-            item?.trend === "down" ||
-            item?.trend === "neutral"
-              ? item.trend
-              : null,
-        })
-      );
+  (item: any, index: number) => ({
+    id: String(item?.id ?? index),
+
+    course:
+      typeof item?.course === "string" &&
+      item.course.trim()
+        ? item.course
+        : "Unspecified course",
+
+    quiz:
+      typeof item?.quiz === "string" &&
+      item.quiz.trim()
+        ? item.quiz
+        : "Unspecified topic",
+
+    totalRequests: readNumber(item?.totalRequests),
+
+    uniqueStudents: readNumber(item?.uniqueStudents),
+
+    avgRequests: readNumber(item?.avgRequests),
+
+    aiAllowed:
+      typeof item?.aiAllowed === "boolean"
+        ? item.aiAllowed
+        : null,
+
+    trend:
+      item?.trend === "up" ||
+      item?.trend === "down" ||
+      item?.trend === "neutral"
+        ? item.trend
+        : null,
+  })
+);
 
       const overview = summary as {
         totalAiInteractions?: unknown;
@@ -170,9 +186,11 @@ export default function AdminAiUsageScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadAnalytics();
-  }, [loadAnalytics]);
+  useFocusEffect(
+  useCallback(() => {
+    void loadAnalytics();
+  }, [loadAnalytics])
+);
 
   function refreshData() {
     setRefreshing(true);
